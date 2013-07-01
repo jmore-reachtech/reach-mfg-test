@@ -43,41 +43,39 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Open the file for reading and writing
+    /* Open the file for reading and writing */
     fbfd = open("/dev/fb0", O_RDWR);
     if (fbfd == -1) {
         perror("Error: cannot open framebuffer device");
         exit(1);
     }
-    printf("The framebuffer device was opened successfully.\n");
+    /* printf("The framebuffer device was opened successfully.\n"); */
 
-    // Get fixed screen information
+    /* Get fixed screen information */
     if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo) == -1) {
         perror("Error reading fixed information");
         exit(2);
     }
 
-    // Get variable screen information
+    /* Get variable screen information */
     if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo) == -1) {
         perror("Error reading variable information");
         exit(3);
     }
 
-    printf("%dx%d, %dbpp\n", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);
+    /* printf("%dx%d, %dbpp\n", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel); */
 
-    // Figure out the size of the screen in bytes
+    /* Figure out the size of the screen in bytes */
     screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
 
-    // Map the device to memory
+    /* Map the device to memory */
     fbp = (char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fbfd, 0);
     if ((int)fbp == -1) {
         perror("Error: failed to map framebuffer device to memory");
         exit(4);
     }
-    printf("The framebuffer device was mapped to memory successfully.\n");
 
     printf("Opening file: %s\n", argv[1]);
-
     if(!(image = fopen(argv[1], "rb+")))
     {
         printf("Error opening image file!\n");
@@ -86,21 +84,21 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Get the size of the file
+    /* Get the size of the file */
     fseek(image,2,SEEK_SET);
     fread(&bih.size,4,1,image);
-    printf("Size=%d\n",bih.size);
+    //printf("Size=%d\n",bih.size);
     fseek(image,18,SEEK_SET);
     fread(&bih.width,4,1,image);
     fseek(image,22,SEEK_SET);
     fread(&bih.height,4,1,image);
-    printf("Width=%d\tHeight=%d\n",bih.width,bih.height);
+    //printf("Width=%d\tHeight=%d\n",bih.width,bih.height);
     fseek(image,26,SEEK_SET);
     fread(&bih.planes,2,1,image);
-    printf("Number of planes:%d\n",bih.planes);
+    //printf("Number of planes:%d\n",bih.planes);
     fseek(image,28,SEEK_SET);
     fread(&bih.bitcount,2,1,image);
-    printf("Bit Count:%d\n",bih.bitcount);
+    //printf("Bit Count:%d\n",bih.bitcount);
 
     PIXEL pic[bih.width*bih.height*2],p;
 
@@ -139,8 +137,6 @@ int main(int argc, char **argv)
         }
     }
     fclose(image);
-
-    printf("\n");
 
     munmap(fbp, screensize);
     close(fbfd);

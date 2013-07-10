@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <errno.h>
+#include <sys/mman.h>
 #include <linux/spi/spidev.h>
 #include <linux/i2c-dev-user.h>
 #include <linux/input.h>
@@ -23,6 +24,20 @@
 #include <linux/can.h>
 
 #define VERSION     "0.9a"
+
+typedef struct {
+   unsigned int width;
+   unsigned int height;
+   unsigned int planes;
+   unsigned short bitcount;
+   unsigned int size;
+} BITMAPINFOHEADER;
+
+typedef struct {
+   unsigned char blue;
+   unsigned char green;
+   unsigned char red;
+} PIXEL;
 
 typedef int     bool;
 #define TRUE    1
@@ -128,33 +143,35 @@ struct {
     uint8_t     i2c_addr;
     uint8_t     i2c_offset;
     uint8_t     spi_bus;
+    char	   *image_dir;
 } g_info = {
     .debug = 0x0,
     .verbose = FALSE,
     .dryrun = FALSE,
     .repeat = 1,
-    .file_path = "~reach/File-32M",
+    .file_path = "file-32M",
     .tests = NULL,
     .mac_address = NULL,
     .ethernet = {
         .if_name = "eth0",
-        .server_ip = NULL,
-        .local_ip = NULL,
+        .server_ip = "10.10.10.2",
+        .local_ip = "10.10.10.3",
     },
     .usbotg = {
         .if_name = "usb0",
         .remote_macaddr = "10:20:30:40:50:60",
-        .server_ip = "10.10.10.1",
-        .local_ip = "10.10.10.208",
+        .server_ip = "10.10.10.2",
+        .local_ip = "10.10.10.4",
     },
     .rtc_if = NETWORK_USBOTG,
     .rs485_baud = B4000000,
-    .rs232_baud = B576000,
+    .rs232_baud = B1152000,
     .buffer_size = 512,
     .i2c_path = "/dev/i2c-1",
     .i2c_addr = 0x20,
     .i2c_offset = 0x00,
     .spi_bus = 1,
+    .image_dir = "/home/root/",
 };
 
 static int execute_cmd_ex(const char *cmd, char *result, int result_size);
@@ -206,6 +223,283 @@ const struct {
     { B3500000, 3500000 },
     { B4000000, 4000000 },
 };
+
+/* This following is copied from <linux/fb.h>.  fb.h includes i2c.h 
+ * which conflicts with lm-senors i2c-dev-user.h */
+struct fb_bitfield {
+	__u32 offset;			/* beginning of bitfield	*/
+	__u32 length;			/* length of bitfield		*/
+	__u32 msb_right;		/* != 0 : Most significant bit is */ 
+					/* right */ 
+};
+
+struct fb_fix_screeninfo {
+	char id[16];			/* identification string eg "TT Builtin" */
+	unsigned long smem_start;	/* Start of frame buffer mem */
+					/* (physical address) */
+	__u32 smem_len;			/* Length of frame buffer mem */
+	__u32 type;			/* see FB_TYPE_*		*/
+	__u32 type_aux;			/* Interleave for interleaved Planes */
+	__u32 visual;			/* see FB_VISUAL_*		*/ 
+	__u16 xpanstep;			/* zero if no hardware panning  */
+	__u16 ypanstep;			/* zero if no hardware panning  */
+	__u16 ywrapstep;		/* zero if no hardware ywrap    */
+	__u32 line_length;		/* length of a line in bytes    */
+	unsigned long mmio_start;	/* Start of Memory Mapped I/O   */
+					/* (physical address) */
+	__u32 mmio_len;			/* Length of Memory Mapped I/O  */
+	__u32 accel;			/* Indicate to driver which	*/
+					/*  specific chip/card we have	*/
+	__u16 capabilities;		/* see FB_CAP_*			*/
+	__u16 reserved[2];		/* Reserved for future compatibility */
+};
+
+struct fb_var_screeninfo {
+	__u32 xres;			/* visible resolution		*/
+	__u32 yres;
+	__u32 xres_virtual;		/* virtual resolution		*/
+	__u32 yres_virtual;
+	__u32 xoffset;			/* offset from virtual to visible */
+	__u32 yoffset;			/* resolution			*/
+
+	__u32 bits_per_pixel;		/* guess what			*/
+	__u32 grayscale;		/* 0 = color, 1 = grayscale,	*/
+					/* >1 = FOURCC			*/
+	struct fb_bitfield red;		/* bitfield in fb mem if true color, */
+	struct fb_bitfield green;	/* else only length is significant */
+	struct fb_bitfield blue;
+	struct fb_bitfield transp;	/* transparency			*/	
+
+	__u32 nonstd;			/* != 0 Non standard pixel format */
+
+	__u32 activate;			/* see FB_ACTIVATE_*		*/
+
+	__u32 height;			/* height of picture in mm    */
+	__u32 width;			/* width of picture in mm     */
+
+	__u32 accel_flags;		/* (OBSOLETE) see fb_info.flags */
+
+	/* Timing: All values in pixclocks, except pixclock (of course) */
+	__u32 pixclock;			/* pixel clock in ps (pico seconds) */
+	__u32 left_margin;		/* time from sync to picture	*/
+	__u32 right_margin;		/* time from picture to sync	*/
+	__u32 upper_margin;		/* time from sync to picture	*/
+	__u32 lower_margin;
+	__u32 hsync_len;		/* length of horizontal sync	*/
+	__u32 vsync_len;		/* length of vertical sync	*/
+	__u32 sync;			/* see FB_SYNC_*		*/
+	__u32 vmode;			/* see FB_VMODE_*		*/
+	__u32 rotate;			/* angle we rotate counter clockwise */
+	__u32 colorspace;		/* colorspace for FOURCC-based modes */
+	__u32 reserved[4];		/* Reserved for future compatibility */
+};
+
+#define FBIOGET_VSCREENINFO	0x4600
+#define FBIOPUT_VSCREENINFO	0x4601
+#define FBIOGET_FSCREENINFO	0x4602
+
+/****************************************************************************
+ * fbimage
+ */
+int fbimage(char *image_path)
+{
+    int fbfd 				= 0;
+    int tfd 				= 0;
+    char buf[16];
+    size_t nbytes			= 0;
+	ssize_t bytes_read		= 0;
+    struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
+    long int screensize 	= 0;
+    char *fbp 				= 0;
+    int x = 0, y 			= 0;
+    long int location 		= 0;
+
+    FILE *image;
+    BITMAPINFOHEADER bih;
+
+    /* Open the file for reading and writing */
+    fbfd = open("/dev/fb0", O_RDWR);
+    if (fbfd == -1) {
+        perror("Error: cannot open framebuffer device");
+        exit(1);
+    }
+    /* printf("The framebuffer device was opened successfully.\n"); */
+
+    /* Get fixed screen information */
+    if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo) == -1) {
+        perror("Error reading fixed information");
+        exit(2);
+    }
+
+    /* Get variable screen information */
+    if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo) == -1) {
+        perror("Error reading variable information");
+        exit(3);
+    }
+
+    /* printf("%dx%d, %dbpp\n", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel); */
+
+    /* Figure out the size of the screen in bytes */
+    screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
+
+    /* Map the device to memory */
+    fbp = (char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fbfd, 0);
+    if ((int)fbp == -1) {
+        perror("Error: failed to map framebuffer device to memory");
+        exit(4);
+    }
+
+    printf("Opening file: %s\n", image_path);
+    if(!(image = fopen(image_path, "rb+")))
+    {
+        printf("Error opening image file!\n");
+        munmap(fbp, screensize);
+        close(fbfd);
+        return 1;
+    }
+
+    /* Get the size of the file */
+    fseek(image,2,SEEK_SET);
+    fread(&bih.size,4,1,image);
+    //printf("Size=%d\n",bih.size);
+    fseek(image,18,SEEK_SET);
+    fread(&bih.width,4,1,image);
+    fseek(image,22,SEEK_SET);
+    fread(&bih.height,4,1,image);
+    //printf("Width=%d\tHeight=%d\n",bih.width,bih.height);
+    fseek(image,26,SEEK_SET);
+    fread(&bih.planes,2,1,image);
+    //printf("Number of planes:%d\n",bih.planes);
+    fseek(image,28,SEEK_SET);
+    fread(&bih.bitcount,2,1,image);
+    //printf("Bit Count:%d\n",bih.bitcount);
+
+    PIXEL pic[bih.width*bih.height*2],p;
+
+    fseek(image,54,SEEK_SET);
+
+    int j=0;
+    uint counter;
+    for (counter = 0; counter <= (bih.size-54); counter += 3)
+    {
+        fread(&p,sizeof(p),1,image);
+
+        if(!feof(image))
+        {
+            pic[j]=p;
+            //printf("%d= %d %d %d ",j+54,pic[j].blue,pic[j].green,pic[j].red);
+            j++;
+        }
+    }
+
+    j=0;
+    // Figure out where in memory to put the pixel
+    for (y = 0; y < bih.height; y++) {
+        for (x = 0; x < bih.width; x++) {
+
+            location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) +
+                       (y+vinfo.yoffset) * finfo.line_length;
+
+            if (vinfo.bits_per_pixel == 32) {
+                *(fbp + location) = pic[j].blue;        // Blue
+                *(fbp + location + 1) = pic[j].green;   // Green
+                *(fbp + location + 2) = pic[j].red;     // Red
+                *(fbp + location + 3) = 0;      // No transparency
+                j++; //increment pixel pointer.
+            }
+
+        }
+    }
+    fclose(image);
+
+    munmap(fbp, screensize);
+    close(fbfd);
+    
+    /* open the touch device */
+    tfd = open("/dev/input/touchscreen0", O_RDONLY);
+    if (tfd == -1) {
+        perror("Error: cannot open touch device");
+        exit(1);
+    }
+    printf("Touch image to continue \n");
+    nbytes = sizeof(buf);
+    bytes_read = read(tfd, buf, nbytes);
+            
+    close(tfd);
+    return 0;
+}
+
+
+int fbutil(int r, int g, int b)
+{
+	int fd = 0;
+	struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
+    long int screensize = 0;
+    char *fbp = 0;
+    int x = 0, y = 0;
+    long int location = 0;
+    int count = 0;
+    
+	// Open the file for reading and writing
+    fd = open("/dev/fb0", O_RDWR);
+    if (fd == -1) {
+        perror("Error: cannot open framebuffer device");
+        exit(1);
+    }
+    //printf("The framebuffer device was opened successfully.\n");
+    
+    // Get fixed screen information
+    if (ioctl(fd, FBIOGET_FSCREENINFO, &finfo) == -1) {
+        perror("Error reading fixed information");
+        exit(2);
+    }
+
+    // Get variable screen information
+    if (ioctl(fd, FBIOGET_VSCREENINFO, &vinfo) == -1) {
+        perror("Error reading variable information");
+        exit(3);
+    }
+
+    //printf("%dx%d, %dbpp\n", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);
+    //printf("xoffset: %d yoffset: %d\n", vinfo.xoffset, vinfo.yoffset);
+
+    // Figure out the size of the screen in bytes
+    screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
+	
+	//printf("Screensize: %lu\n",screensize);
+	
+	// Map the device to memory
+    fbp = (char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if ((int)fbp == -1) {
+        perror("Error: failed to map framebuffer device to memory");
+        exit(4);
+    }
+    //printf("The framebuffer device was mapped to memory successfully.\n");
+		
+	x = 0; y = 0; /* Where we are going to put the pixel */
+
+	/* Figure out where in memory to put the pixel */
+	location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) + (y+vinfo.yoffset) * finfo.line_length;
+	//printf("Starting at location: %lu\n", location);	
+	while ( location < screensize)
+	{
+		*(fbp + location) = b;     /* blue         */
+		*(fbp + location + 1) = g; /* green        */
+		*(fbp + location + 2) = r; /* red          */
+		*(fbp + location + 3) = 0x0;  /* transparency */
+		location += 4;
+		count++;
+	}
+	
+	//printf("location: %lu count: %d\n",location,count);
+	
+	munmap(fbp, screensize);
+	close(fd);
+	
+	return 0;
+}
 
 /****************************************************************************
  * DbgDataToString
@@ -1112,7 +1406,7 @@ test_Ethernet(void)
     flags |= _ETHERNET_INTERFACE_UP;
 
     flags |= _ETHERNET_FILE_DOWNLOADED;
-    sprintf(cmd, "wget -nv -O %s http://%s/%s", local_file, g_info.ethernet.server_ip, g_info.file_path);
+    sprintf(cmd, "wget -O %s http://%s/%s", local_file, g_info.ethernet.server_ip, g_info.file_path);
     rv = execute_cmd(cmd);
     if (rv < 0)
     {
@@ -2518,7 +2812,7 @@ test_CAN(int instance)
         tx_frame.data[x] = (uint8_t) random();
     }
 
-    if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: transmit CAN packet '%s'[%ld]\n", __FUNCTION__, DbgDataToHexString(&tx_frame, 0, sizeof(tx_frame), NULL, 0), sizeof(tx_frame));
+    if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: transmit CAN packet '%s'[%u]\n", __FUNCTION__, DbgDataToHexString(&tx_frame, 0, sizeof(tx_frame), NULL, 0), sizeof(tx_frame));
     nbytes = write(s, &tx_frame, sizeof(tx_frame));
     if (nbytes < 0)
     {
@@ -2572,7 +2866,7 @@ test_CAN(int instance)
 
                 if (nbytes < sizeof(rx_frame))
                 {
-                    fprintf(stderr, "Error: %s: CAN bus read returned %d bytes, expected %ld.\n", __FUNCTION__, nbytes, sizeof(rx_frame));
+                    fprintf(stderr, "Error: %s: CAN bus read returned %d bytes, expected %u.\n", __FUNCTION__, nbytes, sizeof(rx_frame));
                     status = -1;
                     goto e_test_CAN;
                 }
@@ -2580,8 +2874,8 @@ test_CAN(int instance)
                 if (memcmp(&tx_frame, &rx_frame, nbytes) != 0)
                 {
                     fprintf(stderr, "Error: %s: Received data did not match.\n", __FUNCTION__);
-                    if (g_info.verbose) fprintf(stdout, "Debug: %s: transmit '%s'[%ld]\n", __FUNCTION__, DbgDataToHexString(&tx_frame, 0, sizeof(tx_frame), NULL, 0), sizeof(tx_frame));
-                    if (g_info.verbose) fprintf(stdout, "Debug: %s: receive  '%s'[%ld]\n", __FUNCTION__, DbgDataToHexString(&rx_frame, 0, sizeof(rx_frame), NULL, 0), sizeof(rx_frame));
+                    if (g_info.verbose) fprintf(stdout, "Debug: %s: transmit '%s'[%u]\n", __FUNCTION__, DbgDataToHexString(&tx_frame, 0, sizeof(tx_frame), NULL, 0), sizeof(tx_frame));
+                    if (g_info.verbose) fprintf(stdout, "Debug: %s: receive  '%s'[%u]\n", __FUNCTION__, DbgDataToHexString(&rx_frame, 0, sizeof(rx_frame), NULL, 0), sizeof(rx_frame));
                     status = -1;
                     goto e_test_CAN;
                 }
@@ -3034,26 +3328,32 @@ e_test_TouchScreen:
 static int
 test_LCD(void)
 {
-    int status = 0;
+    int status = 1;
     char cmd[128];
     int rv = 0;
-
+    char image[256] = {0};
+    
+    /* load the rgb image */
+    strcat(image,g_info.image_dir);
+    strcat(image,"blackToRGB480x272.bmp");
+    
+    status = fbimage(image);
+    
+    image[0] = '\0';
+    fbutil(0x0,0x0,0x0);
+    
+    /* load the pattern image */
+    strcat(image,g_info.image_dir);
+    strcat(image,"pattern480x272.bmp");
+    
+    status = fbimage(image);
+    
+    image[0] = '\0';
+    fbutil(0x0,0x0,0x0);
+    
     //DWG J13:LCD
     // Target
     //   Display patterns on the screen using QML with pass/fail buttons
-
-#ifdef DWG
-    sprintf(cmd, "ts_calibrate");
-    rv = execute_cmd(cmd);
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
-        status = rv;
-        goto e_test_LCD;
-    }
-#else // DWG
-status = 1; goto e_test_LCD;
-#endif // DWG
 
 e_test_LCD:
 
@@ -3072,6 +3372,8 @@ test_Backlight(void)
     FILE *fp = NULL;
     int delay = 50 * 1000;
     int num_powercycles = 4;
+    
+    fbutil(0xff,0xff,0xff);
 
     //DWG J13:Backlight
     // Target
@@ -3740,6 +4042,7 @@ usage(const char *prog_name)
     fprintf(stdout, "  --rtc-if={ETHERNET|USBOTG}   Network interface for setting/validating RTC (default:%s)\n", RtcIfList[g_info.rtc_if]);
     fprintf(stdout, "  --repeat={n_repeat}          Repeat the list of tests (default:%d)\n", g_info.repeat);
     fprintf(stdout, "  --dry-run                    Do not perform OTP write of MAC address or other permanent changes.\n");
+    fprintf(stdout, "  --image-dir={path}           Directory with framebuffer test images.\n");
     fprintf(stdout, "  --version                    Display version information and exit\n");
 }
 
@@ -3777,13 +4080,12 @@ main(int argc, char *argv[])
         { "spi-bus",     required_argument,  0, 0 },
         { "rtc-if",      required_argument,  0, 0 },
         { "repeat",      required_argument,  0, 0 },
+        { "image-dir",   required_argument,  0, 0 },
         { "help",        no_argument,        0, 'h' },
         { 0, 0, 0, 0 },
     };
 
     g_info.tests = strdup("all");
-    g_info.ethernet.server_ip = strdup("192.168.0.126");
-    g_info.ethernet.local_ip = strdup("192.168.0.208");
 
     while ((opt = getopt_long(argc, argv, short_options,
         long_options, &option_index)) != -1)
@@ -3823,7 +4125,6 @@ main(int argc, char *argv[])
             case 4: // server
                 if (optarg)
                 {
-                    if (g_info.ethernet.server_ip != NULL) free(g_info.ethernet.server_ip);
                     g_info.ethernet.server_ip = strdup(optarg);
                 }
                 break;
@@ -3831,7 +4132,6 @@ main(int argc, char *argv[])
             case 5: // local
                 if (optarg)
                 {
-                    if (g_info.ethernet.local_ip != NULL) free(g_info.ethernet.local_ip);
                     g_info.ethernet.local_ip = strdup(optarg);
                 }
                 break;
@@ -3839,7 +4139,6 @@ main(int argc, char *argv[])
             case 6: // tests
                 if (optarg)
                 {
-                    if (g_info.tests != NULL) free(g_info.tests);
                     g_info.tests = strdup(optarg);
                 }
                 break;
@@ -3851,12 +4150,10 @@ main(int argc, char *argv[])
             case 8: // mac-address
                 if (optarg)
                 {
-                    if (g_info.mac_address != NULL) free(g_info.mac_address);
                     g_info.mac_address = strdup(optarg);
                 }
                 else
                 {
-                    if (g_info.mac_address != NULL) free(g_info.mac_address);
                     g_info.mac_address = strdup(USER_INPUT_STRING);
                 }
                 break;
@@ -3928,6 +4225,13 @@ main(int argc, char *argv[])
                     g_info.repeat = strtoul(optarg, NULL, 0);
                 }
                 break;
+                
+            case 17: // image-dir
+                if (optarg)
+                {
+                    g_info.image_dir = strdup(optarg);
+                }
+                break;
 
             default:
                 fprintf(stdout, "Option '%s'", long_options[option_index].name);
@@ -3946,7 +4250,6 @@ main(int argc, char *argv[])
         case 's':
             if (optarg)
             {
-                if (g_info.ethernet.server_ip != NULL) free(g_info.ethernet.server_ip);
                 g_info.ethernet.server_ip = strdup(optarg);
             }
             break;
@@ -3954,7 +4257,6 @@ main(int argc, char *argv[])
         case 'l':
             if (optarg)
             {
-                if (g_info.ethernet.local_ip != NULL) free(g_info.ethernet.local_ip);
                 g_info.ethernet.local_ip = strdup(optarg);
             }
             break;
@@ -3962,7 +4264,6 @@ main(int argc, char *argv[])
         case 't':
             if (optarg)
             {
-                if (g_info.tests != NULL) free(g_info.tests);
                 g_info.tests = strdup(optarg);
             }
             break;
@@ -3987,7 +4288,7 @@ main(int argc, char *argv[])
     {
         usage(argv[0]);
     }
-
+	
     if (bTestList)
     {
         char phase_str[64];

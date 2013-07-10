@@ -1,10 +1,6 @@
-sources_mfg = mfg_test.c
+sources = mfg_test.c
 
-sources_fbimage = fbimage.c
-
-headers_mfg = 
-
-headers_fbimage = 
+headers = 
 
 CFLAGS=-Wall
 
@@ -14,16 +10,12 @@ else
 	DEBUG = -O2
 endif
 
-all: mfg-test fbimage
+all: mfg-test
 
-mfg-test: $(sources_mfg) $(headers_mfg)
-	$(CC) -DAPP_VERSION='"$(APP_VERSION)"' $(CFLAGS) $(LDFLAGS) $(DEBUG) -o $@ $(sources_mfg)
-
-fbimage: $(sources_fbimage) $(headers_fbimage)
-	$(CC) -DAPP_VERSION='"$(APP_VERSION)"' $(CFLAGS) $(LDFLAGS) $(DEBUG) -o $@ $(sources_fbimage)
-
+mfg-test: $(sources) $(headers)
+	$(CC) -DAPP_VERSION='"$(APP_VERSION)"' $(CFLAGS) $(LDFLAGS) $(DEBUG) -o $@ $(sources)
 
 clean:
-	$(RM) mfg-test fbimage
+	$(RM) mfg-test
 
 .PHONY: all clean

@@ -350,7 +350,9 @@ int fbimage(char *image_path)
         exit(4);
     }
 
-    printf("Opening file: %s\n", image_path);
+	if(g_info.debug) {
+		printf("Opening file: %s\n", image_path);
+	}
     if(!(image = fopen(image_path, "rb+")))
     {
         printf("Error opening image file!\n");
@@ -422,7 +424,8 @@ int fbimage(char *image_path)
         perror("Error: cannot open touch device");
         exit(1);
     }
-    printf("Touch image to continue \n");
+    
+    //printf("Touch image to continue \n");
     nbytes = sizeof(buf);
     bytes_read = read(tfd, buf, nbytes);
             
@@ -1662,11 +1665,89 @@ test_RS485(void)
 static int
 test_AUART(void)
 {
-    const char *devices[] = { "/dev/ttySP1", "/dev/ttyUSB0" };
+	int status = 0;
+	int ret = 0;
+	int fd = -1;
+	char *tty = "/dev/ttySP1";
+    struct termios tcs;
+    char send[2] = "a\0";
+    char rec[2] = "b\0";
+    struct timeval timeout;
+    fd_set rfds;
 
-    //DWG J3:AUART1:/dev/ttySP1 <==> J4:USB1 w/ USB-to-Serial:/dev/ttyUSB0
-
-    return test_serial(devices, g_info.rs232_baud);
+    memset(&tcs, 0, sizeof(tcs));
+    tcs.c_iflag = 0;
+    tcs.c_oflag = 0;
+    tcs.c_cflag = CS8 | CREAD | CLOCAL;
+    tcs.c_lflag = 0;
+    tcs.c_cc[VMIN] = 1;
+    tcs.c_cc[VTIME] = 5;
+    
+    fd = open(tty, O_RDWR);
+    if(fd < 0) {
+		fprintf(stderr, "Error: %s: open('%s') failed: %s [%d]\n", __FUNCTION__,
+			tty, strerror(errno), errno);
+        status = -1;
+        goto e_test_serial;
+	} else {
+		 cfsetospeed(&tcs, B115200);
+         cfsetispeed(&tcs, B115200);
+         tcsetattr(fd, TCSANOW, &tcs);
+	}
+	
+	ret = write(fd,send,1);
+	if(ret != 1) {
+		fprintf(stderr, "Error: %s: %s sent only %d of requested %d bytes.\n", __FUNCTION__, 
+			tty, ret, 1);
+        status = -1;
+        goto e_test_serial;
+	}
+	
+	timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+    
+    ret = select(fd+1, &rfds, NULL, NULL, &timeout);
+    
+    if (ret == -1) {
+        fprintf(stderr, "Error: %s: select() failed: %s [%d]\n", __FUNCTION__,
+			strerror(errno), errno);
+		status = -1;
+        goto e_test_serial;
+    }
+    else if (ret) {
+        ret = read(fd,rec,1);
+        if(ret != 1) {
+			fprintf(stderr, "Error: %s: %s read only %d of requested %d bytes.\n", __FUNCTION__, 
+			tty, ret, 1);
+			status = -1;
+			goto e_test_serial;
+		}
+        
+        if(strcmp(send,rec)) {
+			fprintf(stderr, "Error: %s: read mismatch. Sent '%s' Got '%s'\n", __FUNCTION__,
+				send,rec);
+			status = -1;
+			goto e_test_serial;
+		}
+	}
+    else {
+        fprintf(stderr, "Error: %s: Timeout \n", __FUNCTION__);
+        status = -1;
+        goto e_test_serial;        
+	}
+	
+e_test_serial:
+	if(fd != -1) {
+		/* Restore terminal setup */
+        //rv = ioctl(fd[x], TCSETS, &(tcs[x]));
+        
+        close(fd);
+	}
+	
+	return status;
 }
 
 /****************************************************************************

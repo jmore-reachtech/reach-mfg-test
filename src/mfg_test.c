@@ -425,7 +425,7 @@ int fbimage(char *image_path)
         exit(1);
     }
     
-    //printf("Touch image to continue \n");
+    printf("Touch panel to continue... \n");
     nbytes = sizeof(buf);
     bytes_read = read(tfd, buf, nbytes);
             
@@ -3426,6 +3426,24 @@ test_LCD(void)
     /* load the pattern image */
     strcat(image,g_info.image_dir);
     strcat(image,"pattern480x272.bmp");
+    
+    status = fbimage(image);
+    
+    image[0] = '\0';
+    fbutil(0x0,0x0,0x0);
+    
+    /* load the black image */
+    strcat(image,g_info.image_dir);
+    strcat(image,"black480x272.bmp");
+    
+    status = fbimage(image);
+    
+    image[0] = '\0';
+    fbutil(0x0,0x0,0x0);
+    
+    /* load the white image */
+    strcat(image,g_info.image_dir);
+    strcat(image,"white480x272.bmp");
     
     status = fbimage(image);
     

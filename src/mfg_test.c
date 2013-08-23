@@ -160,7 +160,7 @@ struct {
     .usbotg = {
         .if_name = "usb0",
         .remote_macaddr = "10:20:30:40:50:60",
-        .server_ip = "10.10.10.2",
+        .server_ip = "10.10.10.1",
         .local_ip = "10.10.10.4",
     },
     .rtc_if = NETWORK_USBOTG,
@@ -3064,7 +3064,7 @@ test_USBOTG(void)
     flags |= _USBOTG_INTERFACE_UP;
 
     flags |= _USBOTG_FILE_DOWNLOADED;
-    sprintf(cmd, "wget -nv -O %s http://%s/%s", local_file, g_info.usbotg.server_ip, g_info.file_path);
+    sprintf(cmd, "wget -O %s http://%s/%s", local_file, g_info.usbotg.server_ip, g_info.file_path);
     rv = execute_cmd(cmd);
     if (rv < 0)
     {

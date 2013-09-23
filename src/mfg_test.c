@@ -305,7 +305,7 @@ int fbimage(char *image_path)
 {
     int fbfd 				= 0;
     int tfd 				= 0;
-    char buf[16];
+    char buf[8];
     size_t nbytes			= 0;
 	ssize_t bytes_read		= 0;
     struct fb_var_screeninfo vinfo;
@@ -418,16 +418,16 @@ int fbimage(char *image_path)
     munmap(fbp, screensize);
     close(fbfd);
     
-    /* open the touch device */
-    tfd = open("/dev/input/touchscreen0", O_RDONLY);
+    /* open stdin */
+    tfd = open("/dev/stdin", 0);
     if (tfd == -1) {
-        perror("Error: cannot open touch device");
+        perror("Error: cannot open stdin");
         exit(1);
     }
     
-    printf("Touch panel to continue... \n");
+    printf("Press any key to continue...\n");
     nbytes = sizeof(buf);
-    bytes_read = read(tfd, buf, nbytes);
+    bytes_read = read(tfd, buf, nbytes);        
             
     close(tfd);
     return 0;

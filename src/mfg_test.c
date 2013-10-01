@@ -140,8 +140,10 @@ struct {
     uint32_t    rs232_baud;
     uint32_t    buffer_size;
     char       *i2c_path;
-    uint8_t     i2c_addr;
-    uint8_t     i2c_offset;
+    uint8_t     i2c_test_addr;
+    uint8_t     i2c_test_offset;
+    uint8_t     i2c_gpio_addr;
+    uint8_t     i2c_gpio_offset;
     uint8_t     spi_bus;
     char	   *image_dir;
 } g_info = {
@@ -168,8 +170,10 @@ struct {
     .rs232_baud = B1152000,
     .buffer_size = 512,
     .i2c_path = "/dev/i2c-1",
-    .i2c_addr = 0x20,
-    .i2c_offset = 0x00,
+    .i2c_test_addr = 0x20,
+    .i2c_test_offset = 0x00,
+    .i2c_gpio_addr = 0x3E,
+    .i2c_gpio_offset = 0x00,
     .spi_bus = 1,
     .image_dir = "/home/root/",
 };
@@ -179,12 +183,6 @@ static int execute_cmd(const char *cmd);
 
 static ethIf_t *network_open(uint8_t if_type, uint8_t instance);
 static int network_close(ethIf_t *ep);
-static gpio_t *gpio_open(uint8_t pin);
-static int gpio_set_direction(gpio_t *gp, uint8_t direction);
-static int gpio_set_polarity(gpio_t *gp, uint8_t polarity);
-static int gpio_get_value(gpio_t *gp, uint8_t *pvalue);
-static int gpio_set_value(gpio_t *gp, uint8_t value);
-static int gpio_close(gpio_t *gp);
 static int barcode_read(char *buffer, uint8_t *pbuffer_size, uint32_t timeout_us);
 
 const struct {
@@ -427,7 +425,10 @@ int fbimage(char *image_path)
     
     printf("Press any key to continue...\n");
     nbytes = sizeof(buf);
-    bytes_read = read(tfd, buf, nbytes);        
+    bytes_read = read(tfd, buf, nbytes);
+    if (g_info.verbose) { 
+		fprintf(stdout, "Debug: %s: Read %d bytes.\n", __FUNCTION__,bytes_read);
+	}
             
     close(tfd);
     return 0;
@@ -1005,6 +1006,8 @@ test_serial(const char *devices[], uint32_t baud_key)
     struct termios tcs[2];
     struct timeval timeout;
     bool done;
+    uint8_t *test_buf = NULL;
+    uint8_t *buf = NULL;
 
     // Target
     //   Open both ports
@@ -1065,14 +1068,14 @@ test_serial(const char *devices[], uint32_t baud_key)
     timeout.tv_usec = 0;
 
     int test_buf_len = g_info.buffer_size;
-    uint8_t *test_buf = NULL;
+    
     if ((test_buf = malloc(test_buf_len)) == NULL)
     {
         fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, test_buf_len, strerror(errno), errno);
         goto e_test_serial;
     }
     int buf_len = g_info.buffer_size;
-    uint8_t *buf = NULL;
+    
     if ((buf = malloc(buf_len)) == NULL)
     {
         fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, buf_len, strerror(errno), errno);
@@ -1751,663 +1754,136 @@ e_test_serial:
 }
 
 /****************************************************************************
- * gpio_open
- */
-static gpio_t *
-gpio_open(uint8_t pin)
-{
-    gpio_t *gp = NULL;
-    char path[128];
-    FILE *fp = NULL;
-    int rv = 0;
-    int n;
-    struct stat sbuf;
-
-    if ((pin < GPIO_PIN_BASE) || (pin > GPIO_PIN_BASE + GPIO_NUM_PINS))
-    {
-        fprintf(stderr, "Error: %s: Invalid pin number %d\n", __FUNCTION__, pin);
-        goto e_gpio_open;
-    }
-
-    n = sizeof(*gp);
-    if ((gp = malloc(n)) == NULL)
-    {
-        fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, n, strerror(errno), errno);
-        goto e_gpio_open;
-    }
-    memset(gp, 0, n);
-
-    gp->pin = pin;
-    sprintf(gp->if_path, "%s/gpio%d", GPIO_PATH, gp->pin);
-
-    sprintf(path, "%s/export", GPIO_PATH);
-    fp = fopen(path, "ab");
-    if (fp != NULL)
-    {
-        rv = fprintf(fp, "%d", gp->pin);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: fprintf('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-            goto e_gpio_open;
-        }
-
-        fclose(fp);
-        fp = NULL;
-    }
-    else
-    {
-        fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-        goto e_gpio_open;
-    }
-
-    memset(&sbuf, 0, sizeof(sbuf));
-    rv = stat(gp->if_path, &sbuf);
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: stat('%s') failed: %s [%d]\n", __FUNCTION__, gp->if_path, strerror(errno), errno);
-        goto e_gpio_open;
-    }
-
-    if ((sbuf.st_mode & S_IFMT) != S_IFDIR)
-    {
-        fprintf(stderr, "Error: %s: GPIO interface '%s' export failed stat() st_mode:0x%08X\n", __FUNCTION__, gp->if_path, sbuf.st_mode);
-        goto e_gpio_open;
-    }
-    gp->flags |= _GPIO_PIN_EXPORTED;
-
-    rv = gpio_set_direction(gp, _GPIO_DIR_INPUT);
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: gpio_set_direction(%d, INPUT) failed: %s [%d]\n", __FUNCTION__, gp->pin, strerror(errno), errno);
-        goto e_gpio_open;
-    }
-
-    rv = gpio_set_polarity(gp, _GPIO_POL_NORMAL);
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: gpio_set_polarity(%d, NORMAL) failed: %s [%d]\n", __FUNCTION__, gp->pin, strerror(errno), errno);
-        goto e_gpio_open;
-    }
-
-    gp->flags |= _GPIO_PIN_OPEN;
-
-e_gpio_open:
-    if ((gp != NULL) && !(gp->flags & _GPIO_PIN_OPEN))
-    {
-        gpio_close(gp);
-        gp = NULL;
-    }
-
-    return gp;
-}
-
-/****************************************************************************
- * gpio_set_direction
- */
-static int
-gpio_set_direction(gpio_t *gp, uint8_t direction)
-{
-    int status = 0;
-    char path[128];
-    FILE *fp = NULL;
-    int rv = 0;
-    char *direction_str = NULL;
-
-    if (gp == NULL)
-    {
-        fprintf(stderr, "Error: %s: GPIO device handle is NULL\n", __FUNCTION__);
-        status = -1;
-        goto e_gpio_set_direction;
-    }
-
-    if (!(gp->flags & _GPIO_PIN_EXPORTED))
-    {
-        fprintf(stderr, "Error: %s: gpio#%d is not exported\n", __FUNCTION__, gp->pin);
-        status = -1;
-        goto e_gpio_set_direction;
-    }
-
-    if (gp->direction == direction)
-    {
-        goto e_gpio_set_direction;
-    }
-
-    switch (direction)
-    {
-    case _GPIO_DIR_INPUT:   direction_str = "in"; break;
-    case _GPIO_DIR_OUTPUT:  direction_str = "out"; break;
-    }
-
-    if (direction_str == NULL)
-    {
-        fprintf(stderr, "Error: %s: gpio#%d unknown direction %d\n", __FUNCTION__, gp->pin, direction);
-        status = -1;
-        goto e_gpio_set_direction;
-    }
-
-    sprintf(path, "%s/direction", gp->if_path);
-    fp = fopen(path, "ab");
-    if (fp != NULL)
-    {
-        rv = fprintf(fp, "%s", direction_str);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: fprintf('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-            status = -1;
-            goto e_gpio_set_direction;
-        }
-
-        fclose(fp);
-        fp = NULL;
-    }
-    else
-    {
-        fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-        status = -1;
-        goto e_gpio_set_direction;
-    }
-
-    gp->direction = direction;
-
-e_gpio_set_direction:
-    if (fp != NULL)
-    {
-        fclose(fp);
-        fp = NULL;
-    }
-
-    return status;
-}
-
-/****************************************************************************
- * gpio_set_polarity
- */
-static int
-gpio_set_polarity(gpio_t *gp, uint8_t polarity)
-{
-    int status = 0;
-    char path[128];
-    FILE *fp = NULL;
-    int rv = 0;
-    char *polarity_str = NULL;
-
-    if (gp == NULL)
-    {
-        fprintf(stderr, "Error: %s: GPIO device handle is NULL\n", __FUNCTION__);
-        status = -1;
-        goto e_gpio_set_polarity;
-    }
-
-    if (!(gp->flags & _GPIO_PIN_EXPORTED))
-    {
-        fprintf(stderr, "Error: %s: gpio#%d is not exported\n", __FUNCTION__, gp->pin);
-        status = -1;
-        goto e_gpio_set_polarity;
-    }
-
-    if (gp->pin == (GPIO_PIN_BASE + 0))
-    {
-        switch (polarity)
-        {
-        case _GPIO_POL_NORMAL: polarity = _GPIO_POL_INVERT; break;
-        case _GPIO_POL_INVERT: polarity = _GPIO_POL_NORMAL; break;
-        }
-    }
-
-    if (gp->polarity == polarity)
-    {
-        goto e_gpio_set_polarity;
-    }
-
-    switch (polarity)
-    {
-    case _GPIO_POL_NORMAL: polarity_str = "0"; break;
-    case _GPIO_POL_INVERT: polarity_str = "1"; break;
-    }
-
-    if (polarity_str == NULL)
-    {
-        fprintf(stderr, "Error: %s: gpio#%d unknown polarity %d\n", __FUNCTION__, gp->pin, polarity);
-        status = -1;
-        goto e_gpio_set_polarity;
-    }
-
-    sprintf(path, "%s/active_low", gp->if_path);
-    fp = fopen(path, "ab");
-    if (fp != NULL)
-    {
-        rv = fprintf(fp, "%s", polarity_str);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: fprintf('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-            status = -1;
-            goto e_gpio_set_polarity;
-        }
-
-        fclose(fp);
-        fp = NULL;
-    }
-    else
-    {
-        fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-        status = -1;
-        goto e_gpio_set_polarity;
-    }
-
-    gp->polarity = polarity;
-
-e_gpio_set_polarity:
-    if (fp != NULL)
-    {
-        fclose(fp);
-        fp = NULL;
-    }
-
-    return status;
-}
-
-/****************************************************************************
- * gpio_get_value
- */
-static int
-gpio_get_value(gpio_t *gp, uint8_t *pvalue)
-{
-    int status = 0;
-    char path[128];
-    FILE *fp = NULL;
-    int rv = 0;
-
-    *pvalue = ~0x0;
-
-    if (gp == NULL)
-    {
-        fprintf(stderr, "Error: %s: GPIO device handle is NULL\n", __FUNCTION__);
-        status = -1;
-        goto e_gpio_get_value;
-    }
-
-    if (!(gp->flags & _GPIO_PIN_EXPORTED))
-    {
-        fprintf(stderr, "Error: %s: gpio#%d is not exported\n", __FUNCTION__, gp->pin);
-        status = -1;
-        goto e_gpio_get_value;
-    }
-
-    sprintf(path, "%s/value", gp->if_path);
-    fp = fopen(path, "rb");
-    if (fp != NULL)
-    {
-        int value = -1;
-
-        rv = fscanf(fp, "%d", &value);
-        if (rv != 1)
-        {
-            fprintf(stderr, "Error: %s: gpio#%d unable to read value [%d]\n", __FUNCTION__, gp->pin, rv);
-            status = -1;
-            goto e_gpio_get_value;
-        }
-        if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: Read '%s' %d\n", __FUNCTION__, path, value);
-
-        *pvalue = (uint8_t) value;
-
-        fclose(fp);
-        fp = NULL;
-    }
-    else
-    {
-        fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-        status = -1;
-        goto e_gpio_get_value;
-    }
-
-e_gpio_get_value:
-    if (fp != NULL)
-    {
-        fclose(fp);
-        fp = NULL;
-    }
-
-    return status;
-}
-
-/****************************************************************************
- * gpio_set_value
- */
-static int
-gpio_set_value(gpio_t *gp, uint8_t value)
-{
-    int status = 0;
-    char path[128];
-    FILE *fp = NULL;
-    int rv = 0;
-
-    if (gp == NULL)
-    {
-        fprintf(stderr, "Error: %s: GPIO device handle is NULL\n", __FUNCTION__);
-        status = -1;
-        goto e_gpio_set_value;
-    }
-
-    if (!(gp->flags & _GPIO_PIN_EXPORTED))
-    {
-        fprintf(stderr, "Error: %s: gpio#%d is not exported\n", __FUNCTION__, gp->pin);
-        status = -1;
-        goto e_gpio_set_value;
-    }
-
-    if (gp->direction != _GPIO_DIR_OUTPUT)
-    {
-        fprintf(stderr, "Error: %s: gpio#%d is not set to input\n", __FUNCTION__, gp->pin);
-        status = -1;
-        goto e_gpio_set_value;
-    }
-
-    if (gp->polarity == _GPIO_POL_INVERT) value ^= 1;
-
-    sprintf(path, "%s/value", gp->if_path);
-    fp = fopen(path, "ab");
-    if (fp != NULL)
-    {
-        rv = fprintf(fp, "%d", value);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: fprintf('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-            status = -1;
-            goto e_gpio_set_value;
-        }
-
-        fclose(fp);
-        fp = NULL;
-    }
-    else
-    {
-        fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-        status = -1;
-        goto e_gpio_set_value;
-    }
-
-e_gpio_set_value:
-    if (fp != NULL)
-    {
-        fclose(fp);
-        fp = NULL;
-    }
-
-    return status;
-}
-
-/****************************************************************************
- * gpio_close
- */
-static int
-gpio_close(gpio_t *gp)
-{
-    int status = 0;
-    char path[128];
-    FILE *fp = NULL;
-    int rv = 0;
-
-    if (gp == NULL)
-    {
-        fprintf(stderr, "Warning: %s: gpio already closed\n", __FUNCTION__);
-        goto e_gpio_close;
-    }
-
-    if (gp->flags & _GPIO_PIN_EXPORTED)
-    {
-        gp->flags &= ~_GPIO_PIN_OPEN;
-        gp->flags &= ~_GPIO_PIN_EXPORTED;
-
-        sprintf(path, "%s/unexport", GPIO_PATH);
-        fp = fopen(path, "ab");
-        if (fp != NULL)
-        {
-            rv = fprintf(fp, "%d", gp->pin);
-            if (rv < 0)
-            {
-                fprintf(stderr, "Error: %s: fprintf('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-            }
-
-            fclose(fp);
-            fp = NULL;
-        }
-        else
-        {
-            fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
-            status = -1;
-        }
-    }
-
-    free(gp);
-    gp = NULL;
-
-e_gpio_close:
-
-    return status;
-}
-
-/****************************************************************************
  * test_GPIO
  */
 static int
 test_GPIO(void)
 {
     int status = 0;
-    int rv = 0;
-    int n, x;
-    int pin;
-    gpio_t *gpio[GPIO_NUM_PINS];
-    uint8_t value, act_value, exp_value;
+#define I2CERR_FILE_OP_FAILED   -1
+#define I2CERR_ODD_ADDR         -2
+#define I2CERR_INV_PARMS        -3
+#define I2CERR_NOT_IMPL         -4
+#define I2CERR_SLAVE            -5
+#define I2CERR_RDWR             -6
+#define INPUT_REG				0x00
+#define OUT_REG					0x01
+#define POLARITY_REG			0x02
+#define CTRL_REG				0x03
 
+    char device[64];
+    int rv 		= 0;
+    int fd 		= -1;
+    int x 		= 0;
+    int mask 	= 0x0;
+	int ctl 	= 0x0;
+    uint8_t i2c_addr = g_info.i2c_gpio_addr;
+    
     //DWG J8:GPIO
     // Target
     //   Loopback high 4xbits to low 4xbits
     //   Walking ones test high-to-low ports
     //   Walking ones test low-to-high ports
-
-    for (n = 0; n < NELEM(gpio); n++)
+	
+    sprintf(device, "%s", g_info.i2c_path);
+    fd = open(device, O_RDWR);
+    if (fd < 0)
     {
-        gpio[n] = NULL;
-    }
-
-    for (n = 0; n < NELEM(gpio); n++)
-    {
-        pin = n + GPIO_PIN_BASE;
-
-        gpio[n] = gpio_open(pin);
-        if (gpio[n] == NULL)
-        {
-            fprintf(stderr, "Error: %s: gpio_open(%d) failed: %s [%d]\n", __FUNCTION__, pin, strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-    }
-
-    for (n = 0; n < NELEM(gpio); n++)
-    {
-        uint8_t direction = _GPIO_DIR_INPUT;
-        rv = gpio_set_direction(gpio[n], direction);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_direction(%d, %s) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, direction == _GPIO_DIR_INPUT ? "INPUT" : "OUTPUT", strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-
-        uint8_t polarity = _GPIO_POL_NORMAL;
-        rv = gpio_set_polarity(gpio[n], polarity);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_polarity(%d, %s) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, polarity == _GPIO_POL_NORMAL ? "NORMAL" : "INVERT", strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-    }
-
-    for (n = 0; n < NELEM(gpio) / 2; n++)
-    {
-        uint8_t dir = _GPIO_DIR_OUTPUT;
-
-        rv = gpio_set_direction(gpio[n], dir);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_direction(%d, %s) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, (dir == _GPIO_DIR_OUTPUT) ? "OUTPUT" : "INPUT", strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-    }
-
-    act_value = 0x00;
-    exp_value = 0x00;
-    for (n = 0; n < NELEM(gpio); n++)
-    {
-        rv = gpio_get_value(gpio[n], &value);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_get_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-
-        act_value |= (value << gpio_map[n]);
-    }
-    if (g_info.verbose) fprintf(stdout, "Debug: %s: Output / Input read 0x%02X.\n", __FUNCTION__, act_value);
-    if (act_value != exp_value)
-    {
-        fprintf(stderr, "Error: %s: All zero failed. Expected:0x%02X Actual:0x%02X\n", __FUNCTION__, exp_value, act_value);
+        fprintf(stderr, "Error: %s: open('%s') failed: %s [%d]\n", __FUNCTION__, device, strerror(errno), errno);
         status = -1;
+        goto e_test_GPIO;
     }
 
-    exp_value = 0x00;
-    for (x = 0; x < NELEM(gpio) / 2; x++)
+	rv = ioctl(fd, I2C_SLAVE, i2c_addr);
+    if (rv < 0)
     {
-        uint8_t pin = gpio_map[x];
-
-        rv = gpio_set_value(gpio[pin], 1);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[pin]->pin, strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-
-        act_value = 0x00;
-        exp_value |= ((0x01 << x) | (0x10 << x));
-        for (n = 0; n < NELEM(gpio); n++)
-        {
-            rv = gpio_get_value(gpio[n], &value);
-            if (rv < 0)
-            {
-                fprintf(stderr, "Error: %s: gpio_get_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, strerror(errno), errno);
-                status = -1;
-                goto e_test_GPIO;
-            }
-
-            act_value |= (value << gpio_map[n]);
-        }
-        if (g_info.verbose) fprintf(stdout, "Debug: %s: One fill test 0x%02X.\n", __FUNCTION__, act_value);
-        if (act_value != exp_value)
-        {
-            fprintf(stderr, "Error: %s: One fill failed. Expected:0x%02X Actual:0x%02X\n", __FUNCTION__, exp_value, act_value);
-            status = -1;
-        }
+        fprintf(stderr, "Error: %s: ioctl(I2C_SLAVE) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = I2CERR_FILE_OP_FAILED;
+        goto e_test_GPIO;
     }
-
-    exp_value = 0xFF;
-    for (x = 0; x < NELEM(gpio) / 2; x++)
-    {
-        uint8_t pin = gpio_map[x];
-
-        rv = gpio_set_value(gpio[pin], 0);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[pin]->pin, strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-
-        act_value = 0x00;
-        exp_value &= ~((0x01 << x) | (0x10 << x));
-        for (n = 0; n < NELEM(gpio); n++)
-        {
-            rv = gpio_get_value(gpio[n], &value);
-            if (rv < 0)
-            {
-                fprintf(stderr, "Error: %s: gpio_get_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, strerror(errno), errno);
-                status = -1;
-                goto e_test_GPIO;
-            }
-
-            act_value |= (value << gpio_map[n]);
-        }
-        if (g_info.verbose) fprintf(stdout, "Debug: %s: Zero fill test 0x%02X.\n", __FUNCTION__, act_value);
-        if (act_value != exp_value)
-        {
-            fprintf(stderr, "Error: %s: Zero fill failed. Expected:0x%02X Actual:0x%02X\n", __FUNCTION__, exp_value, act_value);
-            status = -1;
-        }
-    }
-
-    exp_value = 0x00;
-    for (x = 0; x < NELEM(gpio) / 2; x++)
-    {
-        uint8_t pin = gpio_map[x];
-
-        rv = gpio_set_value(gpio[pin], 1);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[pin]->pin, strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-
-        act_value = 0x00;
-        exp_value = ((0x01 << x) | (0x10 << x));
-        for (n = 0; n < NELEM(gpio); n++)
-        {
-            rv = gpio_get_value(gpio[n], &value);
-            if (rv < 0)
-            {
-                fprintf(stderr, "Error: %s: gpio_get_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[n]->pin, strerror(errno), errno);
-                status = -1;
-                goto e_test_GPIO;
-            }
-
-            act_value |= (value << gpio_map[n]);
-        }
-        if (g_info.verbose) fprintf(stdout, "Debug: %s: Walking one test 0x%02X.\n", __FUNCTION__, act_value);
-        if (act_value != exp_value)
-        {
-            fprintf(stderr, "Error: %s: Walking one failed. Expected:0x%02X Actual:0x%02X\n", __FUNCTION__, exp_value, act_value);
-            status = -1;
-        }
-
-        rv = gpio_set_value(gpio[pin], 0);
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: gpio_set_value(%d) failed: %s [%d]\n", __FUNCTION__, gpio[pin]->pin, strerror(errno), errno);
-            status = -1;
-            goto e_test_GPIO;
-        }
-    }
-
+	
+	/* set up control and mask bits */
+	mask = 0x80;
+	ctl = 0xF0;
+	/* walk 1 over lower 4 bits */
+	for(x = 0; x < 4; x++) {		
+		/* write to the OUT_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, OUT_REG, (0x1 << x));
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* write to the CTRL_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, CTRL_REG, ctl);
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* read the INPUT_REG register of the i2c device */
+		rv = i2c_smbus_read_byte_data(fd, INPUT_REG);
+		if(rv < 0) {
+			fprintf( stderr, "failed to read from slave \n" );
+			status = -1;
+			goto e_test_GPIO;
+		}
+		if (g_info.verbose) {
+			fprintf(stdout, "INPUT  = 0x%02X\t", rv);
+			fprintf(stdout, "RESULT = 0x%02X\t", (rv & (mask >> x)));
+			fprintf(stdout, "LOOP   = 0x%02X\n", (mask >> x));
+		}
+		if(((mask >> x) != (rv & (mask >> x)))) {
+			fprintf(stdout, "Got 0x%02X expected 0x%02X\n", (rv & (mask >> x)),(mask >> x));
+			status = -1;
+			goto e_test_GPIO;
+		}
+	}
+	
+	/* reset control bits */
+	ctl = 0x0F;
+	/* walk 1 over upper 4 bits */
+	for(x = 7; x > 3; x--) {		
+		/* write to the OUT_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, OUT_REG, (0x1 << x));
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* write to the CTRL_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, CTRL_REG, ctl);
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* read the INPUT_REG register 0x00 of the i2c device */
+		rv = i2c_smbus_read_byte_data(fd, INPUT_REG);
+		if(rv < 0) {
+			fprintf( stderr, "failed to read from slave \n" );
+			status = -1;
+			goto e_test_GPIO;
+		}
+		if (g_info.verbose) {
+			fprintf(stdout, "INPUT  = 0x%02X\t", rv);
+			fprintf(stdout, "RESULT = 0x%02X\t", (rv & (mask >> x)));
+			fprintf(stdout, "LOOP   = 0x%02X\n", (mask >> x));
+		}
+		if(((mask >> x) != (rv & (mask >> x)))) {
+			fprintf(stdout, "Got 0x%02X expected 0x%02X\n", (rv & (mask >> x)),(mask >> x));
+			status = -1;
+			goto e_test_GPIO;
+		}
+	}
+	
 e_test_GPIO:
-    for (n = 0; n < GPIO_NUM_PINS; n++)
-    {
-        if (gpio[n] != NULL)
-        {
-            pin = n + GPIO_PIN_BASE;
 
-            rv = gpio_close(gpio[n]);
-            if (rv < 0)
-            {
-                fprintf(stderr, "Error: %s: gpio_close(%d) failed: %s [%d]\n", __FUNCTION__, pin, strerror(errno), errno);
-                status = -1;
-            }
-            gpio[n] = NULL;
-        }
+	if (fd >= 0) {
+        close(fd);
+        fd = -1;
     }
-
+    
     return status;
 }
 
@@ -2598,8 +2074,8 @@ test_I2C(void)
     uint8_t *rx_buf = NULL;
     int rx_buf_len = tx_buf_len * 2;
     int nbytes;
-    uint8_t i2c_addr = g_info.i2c_addr;
-    uint8_t i2c_offset = g_info.i2c_offset;
+    uint8_t i2c_addr = g_info.i2c_test_addr;
+    uint8_t i2c_offset = g_info.i2c_test_offset;
     int x;
 
     //DWG J9:I2C
@@ -3410,8 +2886,7 @@ static int
 test_LCD(void)
 {
     int status = 1;
-    char cmd[128];
-    int rv = 0;
+    //char cmd[128];
     char image[256] = {0};
     
     /* load the rgb image */
@@ -3453,8 +2928,6 @@ test_LCD(void)
     //DWG J13:LCD
     // Target
     //   Display patterns on the screen using QML with pass/fail buttons
-
-e_test_LCD:
 
     return status;
 }
@@ -4135,8 +3608,8 @@ usage(const char *prog_name)
     fprintf(stdout, "  --rs485-baud={baud_rate}     Set RS485 baud rate (default:%s)\n", baud_key_to_str(g_info.rs485_baud));
     fprintf(stdout, "  --rs232-baud={baud_rate}     Set RS232 baud rate (default:%s)\n", baud_key_to_str(g_info.rs232_baud));
     fprintf(stdout, "  --buffer-size={buf_size}     Set test buffer size (default:%u)\n", g_info.buffer_size);
-    fprintf(stdout, "  --i2c-addr={i2c_addr}        Set the I2C device address (default:0x%02X)\n", g_info.i2c_addr);
-    fprintf(stdout, "  --i2c-offset={i2c_offset}    Set the I2C write/read offset (default:0x%02X)\n", g_info.i2c_offset);
+    fprintf(stdout, "  --i2c-addr={i2c_addr}        Set the I2C device address (default:0x%02X)\n", g_info.i2c_test_addr);
+    fprintf(stdout, "  --i2c-offset={i2c_offset}    Set the I2C write/read offset (default:0x%02X)\n", g_info.i2c_test_offset);
     fprintf(stdout, "  --spi-bus={spi_bus}          Set the SPI bus number (default:%d)\n", g_info.spi_bus);
     fprintf(stdout, "  --rtc-if={ETHERNET|USBOTG}   Network interface for setting/validating RTC (default:%s)\n", RtcIfList[g_info.rtc_if]);
     fprintf(stdout, "  --repeat={n_repeat}          Repeat the list of tests (default:%d)\n", g_info.repeat);
@@ -4281,14 +3754,14 @@ main(int argc, char *argv[])
             case 12: // i2c-addr
                 if (optarg)
                 {
-                    g_info.i2c_addr = (uint8_t) strtoul(optarg, NULL, 0);
+                    g_info.i2c_test_addr = (uint8_t) strtoul(optarg, NULL, 0);
                 }
                 break;
 
             case 13: // i2c-offset
                 if (optarg)
                 {
-                    g_info.i2c_offset = (uint8_t) strtoul(optarg, NULL, 0);
+                    g_info.i2c_test_offset = (uint8_t) strtoul(optarg, NULL, 0);
                 }
                 break;
 

@@ -2891,7 +2891,7 @@ test_LCD(void)
     
     /* load the rgb image */
     strcat(image,g_info.image_dir);
-    strcat(image,"blackToRGB480x272.bmp");
+    strcat(image,"blackToRGB.bmp");
     
     status = fbimage(image);
     
@@ -2900,7 +2900,7 @@ test_LCD(void)
     
     /* load the pattern image */
     strcat(image,g_info.image_dir);
-    strcat(image,"pattern480x272.bmp");
+    strcat(image,"pattern.bmp");
     
     status = fbimage(image);
     
@@ -2909,7 +2909,7 @@ test_LCD(void)
     
     /* load the black image */
     strcat(image,g_info.image_dir);
-    strcat(image,"black480x272.bmp");
+    strcat(image,"black.bmp");
     
     status = fbimage(image);
     
@@ -2918,7 +2918,7 @@ test_LCD(void)
     
     /* load the white image */
     strcat(image,g_info.image_dir);
-    strcat(image,"white480x272.bmp");
+    strcat(image,"white.bmp");
     
     status = fbimage(image);
     

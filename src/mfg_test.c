@@ -31,6 +31,7 @@ typedef struct {
    unsigned int planes;
    unsigned short bitcount;
    unsigned int size;
+   unsigned int offset;
 } BITMAPINFOHEADER;
 
 typedef struct {
@@ -374,10 +375,14 @@ int fbimage(char *image_path)
     fseek(image,28,SEEK_SET);
     fread(&bih.bitcount,2,1,image);
     //printf("Bit Count:%d\n",bih.bitcount);
+    fseek(image,10,SEEK_SET);
+    fread(&bih.offset,4,1,image);
+    //printf("Offset:%d\n",bih.offset);
 
     PIXEL pic[bih.width*bih.height*2],p;
 
-    fseek(image,54,SEEK_SET);
+
+    fseek(image,bih.offset,SEEK_SET);
 
     int j=0;
     uint counter;
@@ -406,9 +411,14 @@ int fbimage(char *image_path)
                 *(fbp + location + 1) = pic[j].green;   // Green
                 *(fbp + location + 2) = pic[j].red;     // Red
                 *(fbp + location + 3) = 0;      // No transparency
-                j++; //increment pixel pointer.
+            } else { //assume 16bpp
+                int b = pic[j].blue;
+                int g = pic[j].green;
+                int r = pic[j].red;
+                unsigned short int t = (b<<8 & 0xf800) | (g << 3 & 0x7e0) | (r >> 3);
+                *((unsigned short int*)(fbp + location)) = t; 
             }
-
+            j++; //increment pixel pointer.
         }
     }
     fclose(image);

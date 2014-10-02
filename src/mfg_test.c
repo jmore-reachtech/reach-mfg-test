@@ -1118,6 +1118,8 @@ e_test_Ethernet:
     return status;
 }
 
+
+
 /****************************************************************************
  * test_LCD
  */
@@ -1159,6 +1161,31 @@ e_test_dip:
     }
     
     return status;
+}
+
+/****************************************************************************
+ * test_Touchscreen
+ */
+static int
+test_Touchscreen(void)
+{
+	int status = 0;
+	char cmd[128];
+	int rv = 0;
+	
+	fprintf(stdout, "User: Perform LCD Touchscreen calibration \n");
+	sprintf(cmd, "ts_calibrate");
+	rv = execute_cmd(cmd);
+	if (rv < 0) {
+		fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", 
+			__FUNCTION__, cmd, strerror(errno), errno);
+		status = rv;
+		goto e_test_touchscreen;
+	}
+	
+e_test_touchscreen:
+
+	return status;
 }
 
 /****************************************************************************
@@ -1554,8 +1581,9 @@ struct {
     { "J3",     "Ethernet",         test_Ethernet,     _TEST_P1 },
 #define TESTS_PHASE1    12                                
     { "J14",    "LCD",              test_LCD,          _TEST_P1 },
-    { "J8",    "Backlight",        test_Backlight,    _TEST_P1 },
+    { "J8",    	"Backlight",        test_Backlight,    _TEST_P1 },
     { "S1",    	"Dipswitch",        test_Dipswitch,    _TEST_P1 },
+    { "J14",	"Touchscreen",      test_Touchscreen,  _TEST_P1 },
 };
 
 /****************************************************************************

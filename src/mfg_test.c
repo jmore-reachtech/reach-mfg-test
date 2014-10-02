@@ -1658,6 +1658,96 @@ test_LCD(void)
 }
 
 /****************************************************************************
+ * test_USBOTG
+ */
+static int
+test_USBOTG(void)
+{
+    int status = 0;
+    const char local_file[] = "/tmp/UsbOtgDownload";
+    char cmd[128];
+    int rv = 0;
+    ethIf_t *ep = NULL;
+
+    #define _USBOTG_INTERFACE_UP    (0x01 << 0)
+    #define _USBOTG_FILE_DOWNLOADED (0x01 << 1)
+    uint8_t flags = 0x0;
+
+    //DWG J2:USB0 <==> Host via USB-Ethernet
+    // Host
+    //   - Enable web server
+    //   - /etc/sysconfig/network-scripts/ifcfg-usb0
+    //       TYPE=Ethernet
+    //       BOOTPROTO=none
+    //       IPADDR0=10.0.0.1
+    //       PREFIX0=24
+    //       DEFROUTE=yes
+    //       IPV4_FAILURE_FATAL=yes
+    //       IPV6INIT=no
+    //       NAME=usb0
+    //       UUID=05e483a4-657d-4553-8d98-dd6f63ffc9c6
+    //       ONBOOT=yes
+    //       HWADDR=10:20:30:40:50:60
+    //
+    // Target
+    //   modprobe g_ether host_addr=10:20:30:40:50:60
+    //   ifconfig usb0 10.0.0.2 netmask 255.255.255.0 up
+    //   ping 10.0.0.1
+    //   cd /tmp
+    //   wget http://10.0.0.1/~reach/File-50M
+    //   rm File-50M
+
+    ep = network_open(NETWORK_USBOTG, 0);
+    if (ep == NULL)
+    {
+        fprintf(stderr, "Error: %s: network_open() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_USBOTG;
+    }
+    flags |= _USBOTG_INTERFACE_UP;
+
+    flags |= _USBOTG_FILE_DOWNLOADED;
+    sprintf(cmd, "wget -O %s http://%s/%s", local_file, g_info.usbotg.server_ip, g_info.file_path);
+    rv = execute_cmd(cmd);
+    if (rv < 0)
+    {
+        fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+        status = rv;
+        goto e_test_USBOTG;
+    }
+
+e_test_USBOTG:
+    if (flags & _USBOTG_FILE_DOWNLOADED)
+    {
+        sprintf(cmd, "rm -f %s", local_file);
+        rv = execute_cmd(cmd);
+        if (rv < 0)
+        {
+            fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+            status = rv;
+        }
+        flags &= ~_USBOTG_FILE_DOWNLOADED;
+    }
+
+    if (flags & _USBOTG_INTERFACE_UP)
+    {
+        if (ep != NULL)
+        {
+            rv = network_close(ep);
+            if (rv < 0)
+            {
+                fprintf(stderr, "Error: %s: network_close() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+                status = -1;
+            }
+            ep = NULL;
+        }
+        flags &= ~_USBOTG_INTERFACE_UP;
+    }
+
+    return status;
+}
+
+/****************************************************************************
  * test_Backlight
  */
 static int
@@ -2022,6 +2112,7 @@ struct {
     uint8_t     flags;
 } MfgTests[] = {
     { "J3",     "Ethernet",         test_Ethernet,     	_TEST_P1 },
+    { "J5",     "USBOTG",           test_USBOTG,       	_TEST_P1 },
 #define TESTS_PHASE1    12                                
     { "J14",    "LCD",              test_LCD,          	_TEST_P1 },
     { "J8",    	"Backlight",        test_Backlight,    	_TEST_P1 },

@@ -1154,27 +1154,23 @@ test_Backlight(void)
     int rv = 0;
     char path[128];
     FILE *fp = NULL;
-    int delay = 50 * 1000;
+    int delay = 100 * 1000;
     int num_powercycles = 4;
     
-    /* FIX: */
-    fprintf(stdout, "Backlight Test Not Implemented! \n");
-    return 1;
-
     fbutil(0xff,0xff,0xff);
 
     //DWG J13:Backlight
     // Target
     //   Display slider on the screen using QML that adjusts the screen brightness with pass/fail buttons
 
-    sprintf(path, "/sys/class/backlight/mxs-bl/brightness");
+    sprintf(path, "/sys/class/backlight/backlight.22/brightness");
     fp = fopen(path, "ab");
     if (fp != NULL)
     {
         int brightness;
 
         // Backlight brightness ramp down
-        brightness = 100;
+        brightness = 7;
         while (brightness >= 0)
         {
             if (g_info.verbose) fprintf(stdout, "Debug: %s: Brightness %d.\n", __FUNCTION__, brightness);
@@ -1187,12 +1183,12 @@ test_Backlight(void)
             }
 
             usleep(delay);
-            brightness -= 10;
+            brightness -= 1;
         }
 
         // Backlight brightness ramp up
         brightness = 0;
-        while (brightness <= 100)
+        while (brightness <= 7)
         {
             if (g_info.verbose) fprintf(stdout, "Debug: %s: Brightness %d.\n", __FUNCTION__, brightness);
             rv = fprintf(fp, "%d", brightness); fflush(fp);
@@ -1204,7 +1200,7 @@ test_Backlight(void)
             }
 
             usleep(delay);
-            brightness += 10;
+            brightness += 1;
         }
 
         fclose(fp);
@@ -1217,7 +1213,7 @@ test_Backlight(void)
         goto e_test_Backlight;
     }
 
-    sprintf(path, "/sys/class/backlight/mxs-bl/bl_power");
+    sprintf(path, "/sys/class/backlight/backlight.22/bl_power");
     fp = fopen(path, "ab");
     if (fp != NULL)
     {

@@ -1122,6 +1122,49 @@ e_test_Ethernet:
  * test_LCD
  */
 static int
+test_Dipswitch(void)
+{
+    int status = 0;
+    char path[128] = {0};
+    char val[128] = {0};
+    FILE *fp = NULL;
+    int i;
+	
+	sprintf(path, "/sys/kernel/dipswitch/val");
+    fp = fopen(path, "r");
+    if (fp != NULL)
+    {
+		fgets(val,4,fp);
+		/* remove the line feed */
+		for (i=0;i<3;i++) {
+			if (val[i] == 0xA)
+				val[i] = '\0';
+		}
+		
+		fprintf(stdout,"\nDip positon: %s \n",val);
+		
+		fclose(fp);
+        fp = NULL;
+	} else {
+        fprintf(stderr, "Error: %s: fopen('%s') failed: %s [%d]\n", __FUNCTION__, path, strerror(errno), errno);
+        status = -1;
+        goto e_test_dip;
+    }
+
+e_test_dip:
+	if (fp != NULL)
+    {
+        fclose(fp);
+        fp = NULL;
+    }
+    
+    return status;
+}
+
+/****************************************************************************
+ * test_LCD
+ */
+static int
 test_LCD(void)
 {
     int status = 1;
@@ -1510,8 +1553,9 @@ struct {
 } MfgTests[] = {
     { "J3",     "Ethernet",         test_Ethernet,     _TEST_P1 },
 #define TESTS_PHASE1    12                                
-    { "J13",    "LCD",              test_LCD,          _TEST_P2 },
-    { "J13",    "Backlight",        test_Backlight,    _TEST_P2 },
+    { "J14",    "LCD",              test_LCD,          _TEST_P1 },
+    { "J8",    "Backlight",        test_Backlight,    _TEST_P1 },
+    { "S1",    	"Dipswitch",        test_Dipswitch,    _TEST_P1 },
 };
 
 /****************************************************************************

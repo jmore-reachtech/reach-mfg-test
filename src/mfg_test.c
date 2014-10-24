@@ -332,8 +332,8 @@ int fbimage(char *image_path)
     int y			        = 0;
     int j			        = 0;
     long int location 		= 0;
-    int row_size            = 0;
-    int pixel_buf           = 0;
+    //int row_size            = 0;
+    //int pixel_buf           = 0;
     //int counter             = 0;
 
     FILE *image;
@@ -406,6 +406,7 @@ int fbimage(char *image_path)
     fseek(image,30,SEEK_SET);
     fread(&bih.compress_type,4,1,image);
 
+    /**
     printf("***********************************\n");
     printf("Type:\t\t\t%c%c \n",bfh.magic[0], bfh.magic[1]);
     printf("File Size:\t\t%d \n",bfh.filesz);
@@ -417,6 +418,7 @@ int fbimage(char *image_path)
     printf("Bit Count:\t\t%d\n",bih.depth);
     printf("Compression:\t\t%d\n",bih.compress_type);
     printf("***********************************\n");
+    */
 
     int padding = 0;
     int scanlinebytes = bih.width * 3;
@@ -424,10 +426,10 @@ int fbimage(char *image_path)
         padding++;
     int psw = scanlinebytes + padding;    
 
-    row_size = ((bih.depth * bih.width + 31) / 32) * 4;
-    pixel_buf = row_size * abs(bih.height); 
-    printf("row_size = %d, pixel_buf = %d, line = %d, psw = %d \n"
-        , row_size , pixel_buf, finfo.line_length, psw);
+    //row_size = ((bih.depth * bih.width + 31) / 32) * 4;
+    //pixel_buf = row_size * abs(bih.height); 
+    //printf("row_size = %d, pixel_buf = %d, line = %d, psw = %d \n"
+    //    , row_size , pixel_buf, finfo.line_length, psw);
 
     fseek(image,bfh.offset,SEEK_SET);
     uint8_t buffer[bfh.filesz - bfh.offset];
@@ -447,16 +449,9 @@ int fbimage(char *image_path)
         }
     }
 
-    printf("r(%X), g(%X), b(%X)\n", newbuf[0], newbuf[1], newbuf[2]);
-    
     location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) +
         (y+vinfo.yoffset) * finfo.line_length;
             
-    //*(fbp) = newbuf[2];
-    //*(fbp + 1) = newbuf[1];
-    //*(fbp + 2) = newbuf[0];
-    //*(fbp + 3) = 0;
-
     j=0;
     // Figure out where in memory to put the pixel
     for (y = 0; y < bih.height; y++) {
@@ -1117,10 +1112,6 @@ test_Ethernet(void)
     //   cd /tmp
     //   wget http://x.x.x.1/~reach/File-32M
 
-    /* FIX: */
-    fprintf(stdout, "Ethernet Test Not Implemented! \n");
-    return 1;
-
     ep = network_open(NETWORK_ETHERNET, 0);
     if (ep == NULL)
     {
@@ -1658,6 +1649,42 @@ e_test_USB1:
 	return status;
 }
 
+/****************************************************************************
+* test_USB2
+*/
+static int
+test_USB2(void)
+{
+	int status = 0;
+	int rv = 0;
+	//DWG J5:USB2
+	rv = scan_usb_devices();
+	if (rv < 0)
+	{
+		fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
+		status = -1;
+		goto e_test_USB2;
+	}
+	if (NumUsbList <= 0)
+	{
+		fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
+		status = 1;
+		goto e_test_USB2;
+	}
+	int n = 1;
+	switch (UsbList[n] >> 1)
+	{
+		case _USB_SERIAL:
+			status = test_UsbSerial();
+			break;
+		case _USB_MASS_STORAGE:
+			status = test_UsbDiskDrive(UsbList[n] & 0x01);
+			break;
+	}
+e_test_USB2:
+
+	return status;
+}
 
 /****************************************************************************
  * test_Touchscreen
@@ -2173,6 +2200,7 @@ struct {
     { "S1",    	"Dipswitch",        test_Dipswitch,    	_TEST_P1 },
     { "J14",	"Touchscreen",      test_Touchscreen,	_TEST_P1 },
     { "J4", 	"USB1", 			test_USB1, 			_TEST_P1 },
+    { "J5", 	"USB2", 			test_USB2, 			_TEST_P1 },
 };
 
 /****************************************************************************

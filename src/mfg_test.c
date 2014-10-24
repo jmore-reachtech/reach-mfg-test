@@ -1087,6 +1087,98 @@ execute_cmd(const char *cmd)
 }
 
 /****************************************************************************
+ * test_AUART
+ */
+static int
+test_AUART(void)
+{
+	int status = 0;
+	int ret = 0;
+	int fd = -1;
+	char *tty = "/dev/ttymxc1";
+    struct termios tcs;
+    char send[2] = "a\0";
+    char rec[2] = "b\0";
+    struct timeval timeout;
+    fd_set rfds;
+
+    memset(&tcs, 0, sizeof(tcs));
+    tcs.c_iflag = 0;
+    tcs.c_oflag = 0;
+    tcs.c_cflag = CS8 | CREAD | CLOCAL;
+    tcs.c_lflag = 0;
+    tcs.c_cc[VMIN] = 1;
+    tcs.c_cc[VTIME] = 5;
+    
+    fd = open(tty, O_RDWR);
+    if(fd < 0) {
+		fprintf(stderr, "Error: %s: open('%s') failed: %s [%d]\n", __FUNCTION__,
+			tty, strerror(errno), errno);
+        status = -1;
+        goto e_test_serial;
+	} else {
+		 cfsetospeed(&tcs, B115200);
+         cfsetispeed(&tcs, B115200);
+         tcsetattr(fd, TCSANOW, &tcs);
+	}
+	
+	ret = write(fd,send,1);
+	if(ret != 1) {
+		fprintf(stderr, "Error: %s: %s sent only %d of requested %d bytes.\n", __FUNCTION__, 
+			tty, ret, 1);
+        status = -1;
+        goto e_test_serial;
+	}
+	
+	timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+    
+    ret = select(fd+1, &rfds, NULL, NULL, &timeout);
+    
+    if (ret == -1) {
+        fprintf(stderr, "Error: %s: select() failed: %s [%d]\n", __FUNCTION__,
+			strerror(errno), errno);
+		status = -1;
+        goto e_test_serial;
+    }
+    else if (ret) {
+        ret = read(fd,rec,1);
+        if(ret != 1) {
+			fprintf(stderr, "Error: %s: %s read only %d of requested %d bytes.\n", __FUNCTION__, 
+			tty, ret, 1);
+			status = -1;
+			goto e_test_serial;
+		}
+        
+        if(strcmp(send,rec)) {
+			fprintf(stderr, "Error: %s: read mismatch. Sent '%s' Got '%s'\n", __FUNCTION__,
+				send,rec);
+			status = -1;
+			goto e_test_serial;
+		}
+	}
+    else {
+        fprintf(stderr, "Error: %s: Timeout \n", __FUNCTION__);
+        status = -1;
+        goto e_test_serial;        
+	}
+	
+e_test_serial:
+	if(fd != -1) {
+		/* Restore terminal setup */
+        //rv = ioctl(fd[x], TCSETS, &(tcs[x]));
+        
+        close(fd);
+	}
+	
+	return status;
+}
+
+
+/****************************************************************************
  * test_Ethernet
  */
 static int
@@ -2201,6 +2293,7 @@ struct {
     { "J14",	"Touchscreen",      test_Touchscreen,	_TEST_P1 },
     { "J4", 	"USB1", 			test_USB1, 			_TEST_P1 },
     { "J5", 	"USB2", 			test_USB2, 			_TEST_P1 },
+    { "J2", 	"AUART", 			test_AUART,			_TEST_P1 },
 };
 
 /****************************************************************************

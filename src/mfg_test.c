@@ -332,9 +332,7 @@ int fbimage(char *image_path)
     int y			        = 0;
     int j			        = 0;
     long int location 		= 0;
-    //int row_size            = 0;
-    //int pixel_buf           = 0;
-    //int counter             = 0;
+    int ret					= 0;
 
     FILE *image;
     BITMAPFILEHEADER bfh;
@@ -347,19 +345,19 @@ int fbimage(char *image_path)
     fbfd = open("/dev/fb0", O_RDWR);
     if (fbfd == -1) {
         perror("Error: cannot open framebuffer device");
-        exit(1);
+        return 1;
     }
 
     /* Get fixed screen information */
     if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo) == -1) {
         perror("Error reading fixed information");
-        exit(2);
+        return 1;
     }
 
     /* Get variable screen information */
     if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo) == -1) {
         perror("Error reading variable information");
-        exit(3);
+        return 1;
     }
 
     /* Figure out the size of the screen in bytes */
@@ -369,7 +367,7 @@ int fbimage(char *image_path)
     fbp = (char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fbfd, 0);
     if ((int)fbp == -1) {
         perror("Error: failed to map framebuffer device to memory");
-        exit(4);
+        return 1;
     }
 
     if(!(image = fopen(image_path, "rb+")))
@@ -406,7 +404,7 @@ int fbimage(char *image_path)
     fseek(image,30,SEEK_SET);
     fread(&bih.compress_type,4,1,image);
 
-    /**
+	/*
     printf("***********************************\n");
     printf("Type:\t\t\t%c%c \n",bfh.magic[0], bfh.magic[1]);
     printf("File Size:\t\t%d \n",bfh.filesz);
@@ -426,14 +424,19 @@ int fbimage(char *image_path)
         padding++;
     int psw = scanlinebytes + padding;    
 
-    //row_size = ((bih.depth * bih.width + 31) / 32) * 4;
-    //pixel_buf = row_size * abs(bih.height); 
-    //printf("row_size = %d, pixel_buf = %d, line = %d, psw = %d \n"
-    //    , row_size , pixel_buf, finfo.line_length, psw);
+	/*
+    row_size = ((bih.depth * bih.width + 31) / 32) * 4;
+    pixel_buf = row_size * abs(bih.height); 
+    printf("row_size = %d, pixel_buf = %d, line = %d, psw = %d \n"
+        , row_size , pixel_buf, finfo.line_length, psw);
+    */
 
     fseek(image,bfh.offset,SEEK_SET);
     uint8_t buffer[bfh.filesz - bfh.offset];
-    fread(&buffer, 2, sizeof(buffer), image);
+    ret = fread(&buffer, 1, sizeof(buffer), image);
+    if (ret != sizeof(buffer)) {
+		perror("Image read mismatch!");
+	}
         
     uint8_t newbuf[bih.width * bih.height * 3];
     long int bufpos = 0;
@@ -476,10 +479,10 @@ int fbimage(char *image_path)
     tfd = open("/dev/stdin", 0);
     if (tfd == -1) {
         perror("Error: cannot open stdin");
-        exit(1);
+        return 1;
     }
     
-    printf("Press any key to continue...\n");
+    printf("Press Enter key to continue...\n");
     nbytes = sizeof(buf);
     bytes_read = read(tfd, buf, nbytes);
     if (g_info.verbose) { 
@@ -2427,75 +2430,14 @@ main(int argc, char *argv[])
                 }
                 break;
 
-            case 9: // rs485-baud
-                if (optarg)
-                {
-                    g_info.rs485_baud = baud_str_to_key(optarg);
-                }
-                break;
-
-            case 10: // rs232-baud
-                if (optarg)
-                {
-                    g_info.rs232_baud = baud_str_to_key(optarg);
-                }
-                break;
-
-            case 11: // buffer-size
-                if (optarg)
-                {
-                    g_info.buffer_size = strtoul(optarg, NULL, 0);
-                }
-                break;
-
-            case 12: // i2c-addr
-                if (optarg)
-                {
-                    g_info.i2c_test_addr = (uint8_t) strtoul(optarg, NULL, 0);
-                }
-                break;
-
-            case 13: // i2c-offset
-                if (optarg)
-                {
-                    g_info.i2c_test_offset = (uint8_t) strtoul(optarg, NULL, 0);
-                }
-                break;
-
-            case 14: // spi-bus
-                if (optarg)
-                {
-                    g_info.spi_bus = (uint8_t) strtoul(optarg, NULL, 0);
-                }
-                break;
-
-            case 15: // rtc-if
-                if (optarg)
-                {
-                    for (x = 0; x < NELEM(RtcIfList); x++)
-                    {
-                        if (strcasecmp(optarg, RtcIfList[x]) == 0)
-                        {
-                            g_info.rtc_if = x;
-                            break;
-                        }
-                    }
-                    if (x >= NELEM(RtcIfList))
-                    {
-                        fprintf(stdout, "Error: Unknown rtc-if option '%s'\n", optarg);
-                        ret = 1;
-                    }
-                }
-                break;
-
-            case 16: // repeat
+            case 9: // repeat
                 if (optarg)
                 {
                     g_info.repeat = strtoul(optarg, NULL, 0);
                 }
                 break;
                 
-            case 17: // image-dir
+            case 10: // image-dir
                 if (optarg)
                 {
                     g_info.image_dir = strdup(optarg);

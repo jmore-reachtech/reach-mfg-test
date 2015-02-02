@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <linux/spi/spidev.h>
+#include <linux/i2c-dev-user.h>
 #include <linux/input.h>
 #include <sys/socket.h>
 #include <net/if.h>
@@ -154,7 +155,7 @@ struct {
     .rs485_baud = B4000000,
     .rs232_baud = B1152000,
     .buffer_size = 512,
-    .i2c_path = "/dev/i2c-1",
+    .i2c_path = "/dev/i2c-0",
     .i2c_test_addr = 0x20,
     .i2c_test_offset = 0x00,
     .i2c_gpio_addr = 0x3E,
@@ -562,6 +563,91 @@ static int fbutil(int r, int g, int b)
 	close(fd);
 	
 	return 0;
+}
+
+/****************************************************************************
+ * DbgDataToHexString
+ */
+static const char *
+DbgDataToHexString(
+    const void *    pVData,
+    unsigned long   offset,
+    unsigned long   length,
+    char *          pBuffer,
+    unsigned long   bufferLength
+    )
+{
+    static char     Buffer[DBG_BUFFER_LEN] = { 0 }; /* Debug only! */
+    const char      digits[] = "0123456789ABCDEF";
+    const unsigned char *pData = (const unsigned char *) pVData;
+    char           *pB;
+    const unsigned char *pD;
+    unsigned long   x;
+    unsigned char   val;
+
+    /* If the user buffer was not supplied, use the internal buffer. */
+    if (pBuffer == NULL)
+    {
+        pBuffer = Buffer;
+        bufferLength = sizeof(Buffer) - 1;
+    }
+
+    pB = pBuffer;
+
+    if (pData != NULL)
+    {
+        if (length < bufferLength)
+        {
+            pD = (pData + offset);
+            for (x = 0; x < length; x++)
+            {
+                val = pD[x];
+
+                *(pB++) = '[';
+                *(pB++) = digits[(val >> 4) & 0x0F];
+                *(pB++) = digits[val & 0x0F];
+                *(pB++) = ']';
+
+                if (x >= (bufferLength - 12))
+                {
+                    *(pB++) = '.';
+                    *(pB++) = '.';
+                    *(pB++) = '.';
+                    break;
+                }
+            }
+        }
+        else
+        {
+            *(pB++) = '.';
+            *(pB++) = '.';
+            *(pB++) = '.';
+        }
+        *(pB++) = '\0';
+
+#ifdef DWG_DBG_TRUNCATE
+        /* Truncate lines that are too long. */
+        if ((pB - pBuffer) > 512)
+        {
+            pBuffer[0] = '.';
+            pBuffer[1] = '.';
+            pBuffer[2] = '.';
+            pBuffer[3] = '\0';
+        }
+#endif // DWG_DBG_TRUNCATE
+    }
+    else
+    {
+        *(pB++) = '<';
+        *(pB++) = 'N';
+        *(pB++) = 'U';
+        *(pB++) = 'L';
+        *(pB++) = 'L';
+        *(pB++) = '>';
+        *(pB++) = '\0';
+    }
+
+    return pBuffer;
 }
 
 /****************************************************************************
@@ -1807,6 +1893,140 @@ e_test_touchscreen:
 }
 
 /****************************************************************************
+ * test_GPIO
+ */
+static int
+test_GPIO(void)
+{
+    int status = 0;
+#define I2CERR_FILE_OP_FAILED   -1
+#define I2CERR_ODD_ADDR         -2
+#define I2CERR_INV_PARMS        -3
+#define I2CERR_NOT_IMPL         -4
+#define I2CERR_SLAVE            -5
+#define I2CERR_RDWR             -6
+#define INPUT_REG				0x00
+#define OUT_REG					0x01
+#define POLARITY_REG			0x02
+#define CTRL_REG				0x03
+
+    char device[64];
+    int rv 		= 0;
+    int fd 		= -1;
+    int x 		= 0;
+    int mask 	= 0x0;
+	int ctl 	= 0x0;
+    uint8_t i2c_addr = g_info.i2c_gpio_addr;
+    
+    //DWG J8:GPIO
+    // Target
+    //   Loopback high 4xbits to low 4xbits
+    //   Walking ones test high-to-low ports
+    //   Walking ones test low-to-high ports
+	
+    sprintf(device, "%s", g_info.i2c_path);
+    fd = open(device, O_RDWR);
+    if (fd < 0)
+    {
+        fprintf(stderr, "Error: %s: open('%s') failed: %s [%d]\n", __FUNCTION__, device, strerror(errno), errno);
+        status = -1;
+        goto e_test_GPIO;
+    }
+
+	rv = ioctl(fd, I2C_SLAVE, i2c_addr);
+    if (rv < 0)
+    {
+        fprintf(stderr, "Error: %s: ioctl(I2C_SLAVE) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = I2CERR_FILE_OP_FAILED;
+        goto e_test_GPIO;
+    }
+	
+	/* set up control and mask bits */
+	mask = 0x80;
+	ctl = 0xF0;
+	/* walk 1 over lower 4 bits */
+	for(x = 0; x < 4; x++) {		
+		/* write to the OUT_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, OUT_REG, (0x1 << x));
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* write to the CTRL_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, CTRL_REG, ctl);
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* read the INPUT_REG register of the i2c device */
+		rv = i2c_smbus_read_byte_data(fd, INPUT_REG);
+		if(rv < 0) {
+			fprintf( stderr, "failed to read from slave \n" );
+			status = -1;
+			goto e_test_GPIO;
+		}
+		if (g_info.verbose) {
+			fprintf(stdout, "INPUT  = 0x%02X\t", rv);
+			fprintf(stdout, "RESULT = 0x%02X\t", (rv & (mask >> x)));
+			fprintf(stdout, "LOOP   = 0x%02X\n", (mask >> x));
+		}
+		if(((mask >> x) != (rv & (mask >> x)))) {
+			fprintf(stdout, "Got 0x%02X expected 0x%02X\n", (rv & (mask >> x)),(mask >> x));
+			status = -1;
+			goto e_test_GPIO;
+		}
+	}
+	
+	/* reset control bits */
+	ctl = 0x0F;
+	/* walk 1 over upper 4 bits */
+	for(x = 7; x > 3; x--) {		
+		/* write to the OUT_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, OUT_REG, (0x1 << x));
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* write to the CTRL_REG of the i2c device */
+		rv = i2c_smbus_write_byte_data(fd, CTRL_REG, ctl);
+		if(rv < 0) {
+			fprintf( stderr, "failed to write to slave %d\n",errno );
+			return 2;
+		}
+		
+		/* read the INPUT_REG register 0x00 of the i2c device */
+		rv = i2c_smbus_read_byte_data(fd, INPUT_REG);
+		if(rv < 0) {
+			fprintf( stderr, "failed to read from slave \n" );
+			status = -1;
+			goto e_test_GPIO;
+		}
+		if (g_info.verbose) {
+			fprintf(stdout, "INPUT  = 0x%02X\t", rv);
+			fprintf(stdout, "RESULT = 0x%02X\t", (rv & (mask >> x)));
+			fprintf(stdout, "LOOP   = 0x%02X\n", (mask >> x));
+		}
+		if(((mask >> x) != (rv & (mask >> x)))) {
+			fprintf(stdout, "Got 0x%02X expected 0x%02X\n", (rv & (mask >> x)),(mask >> x));
+			status = -1;
+			goto e_test_GPIO;
+		}
+	}
+	
+e_test_GPIO:
+
+	if (fd >= 0) {
+        close(fd);
+        fd = -1;
+    }
+    
+    return status;
+}
+
+/****************************************************************************
  * test_LCD
  */
 static int
@@ -2031,6 +2251,196 @@ e_test_Backlight:
     }
 
     return status;
+}
+
+/****************************************************************************
+ * test_CAN
+ */
+static int
+test_CAN(int instance)
+{
+#ifndef AF_CAN
+# define AF_CAN      29
+# define PF_CAN      AF_CAN
+#endif /* AF_CAN */
+    int status = 0;
+    int rv = 0;
+    int s = -1;
+    struct sockaddr_can sAddr;
+    struct ifreq ifr;
+    struct can_frame tx_frame;
+    struct can_frame rx_frame;
+    struct timeval timeout;
+    bool done;
+    int nbytes;
+    ethIf_t *ep = NULL;
+    int x;
+    #define _CAN_INTERFACE_UP   (0x01 << 0)
+    uint8_t flags = 0x0;
+
+    //DWG J12:CAN
+    // Target
+    //   Write data to the device and read/verify the data is correct
+
+    ep = network_open(NETWORK_CAN, instance);
+    if (ep == NULL)
+    {
+        fprintf(stderr, "Error: %s: network_open() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_CAN;
+    }
+    flags |= _CAN_INTERFACE_UP;
+
+    s = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+    if (s < 0)
+    {
+        fprintf(stderr, "Error: %s: socket(PF_CAN) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_CAN;
+    }
+
+    memset(&ifr, 0, sizeof(ifr));
+    sprintf(ifr.ifr_name, "can%d", instance);
+    rv = ioctl(s, SIOGIFINDEX, &ifr);
+    if (rv < 0)
+    {
+        fprintf(stderr, "Error: %s: ioctl(SIOGIFINDEX) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_CAN;
+    }
+
+    memset(&sAddr, 0, sizeof(sAddr));
+    sAddr.can_family = AF_CAN;
+    sAddr.can_ifindex = ifr.ifr_ifindex;
+
+    rv = bind(s, (struct sockaddr *)&sAddr, sizeof(sAddr));
+    if (rv < 0)
+    {
+        fprintf(stderr, "Error: %s: bind() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_CAN;
+    }
+
+    srandom(0x1234);
+
+    memset(&tx_frame, 0, sizeof(tx_frame));
+    tx_frame.can_id = 0;
+    tx_frame.can_dlc = 8;
+    for (x = 0; x < tx_frame.can_dlc; x++)
+    {
+        tx_frame.data[x] = (uint8_t) random();
+    }
+
+    if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: transmit CAN packet '%s'[%u]\n", __FUNCTION__, DbgDataToHexString(&tx_frame, 0, sizeof(tx_frame), NULL, 0), sizeof(tx_frame));
+    nbytes = write(s, &tx_frame, sizeof(tx_frame));
+    if (nbytes < 0)
+    {
+        fprintf(stderr, "Error: %s: write() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_CAN;
+    }
+
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    done = FALSE;
+    while (!done)
+    {
+        int maxFd = -1;
+        fd_set readFds;
+
+        FD_ZERO(&readFds);
+        FD_SET(s, &readFds);
+        maxFd = s;
+
+        switch (select(maxFd + 1, &readFds, NULL, NULL, &timeout))
+        {
+        case -1: // Error
+            if (errno != EINTR)
+            {
+                fprintf(stderr, "Error: %s: select() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+                status = -1;
+                done = TRUE;
+            }
+            break;
+
+        case 0: // Timeout
+            fprintf(stderr, "Error: %s: Timeout waiting CAN response.\n", __FUNCTION__);
+            status = -1;
+            done = TRUE;
+            break;
+
+        default:
+            if (FD_ISSET(s, &readFds))
+            {
+                memset(&rx_frame, 0, sizeof(rx_frame));
+                nbytes = read(s, &rx_frame, sizeof(rx_frame));
+                if (nbytes < 0)
+                {
+                    fprintf(stderr, "Error: %s: read() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+                    status = -1;
+                    goto e_test_CAN;
+                }
+                if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: receive  CAN packet '%s'[%d]\n", __FUNCTION__, DbgDataToHexString(&rx_frame, 0, nbytes, NULL, 0), nbytes);
+
+                if (nbytes < sizeof(rx_frame))
+                {
+                    fprintf(stderr, "Error: %s: CAN bus read returned %d bytes, expected %u.\n", __FUNCTION__, nbytes, sizeof(rx_frame));
+                    status = -1;
+                    goto e_test_CAN;
+                }
+
+                if (memcmp(&tx_frame, &rx_frame, nbytes) != 0)
+                {
+                    fprintf(stderr, "Error: %s: Received data did not match.\n", __FUNCTION__);
+                    if (g_info.verbose) fprintf(stdout, "Debug: %s: transmit '%s'[%u]\n", __FUNCTION__, DbgDataToHexString(&tx_frame, 0, sizeof(tx_frame), NULL, 0), sizeof(tx_frame));
+                    if (g_info.verbose) fprintf(stdout, "Debug: %s: receive  '%s'[%u]\n", __FUNCTION__, DbgDataToHexString(&rx_frame, 0, sizeof(rx_frame), NULL, 0), sizeof(rx_frame));
+                    status = -1;
+                    goto e_test_CAN;
+                }
+
+                done = TRUE;
+            }
+            break;
+        }
+
+        // Reset polling interval
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+    }
+
+e_test_CAN:
+    if (s >= 0)
+    {
+        close(s);
+        s = -1;
+    }
+
+    if (flags & _CAN_INTERFACE_UP)
+    {
+        if (ep != NULL)
+        {
+            rv = network_close(ep);
+            if (rv < 0)
+            {
+                fprintf(stderr, "Error: %s: network_close() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+                status = -1;
+            }
+            ep = NULL;
+        }
+        flags &= ~_CAN_INTERFACE_UP;
+    }
+
+    return status;
+}
+
+/****************************************************************************
+ * test_CAN0
+ */
+static int
+test_CAN0(void)
+{
+    return test_CAN(0);
 }
 
 /****************************************************************************
@@ -2297,6 +2707,8 @@ struct {
     { "J4", 	"USB1", 			test_USB1, 			_TEST_P1 },
     { "J5", 	"USB2", 			test_USB2, 			_TEST_P1 },
     { "J2", 	"AUART", 			test_AUART,			_TEST_P1 },
+    { "J22",    "GPIO",             test_GPIO,  	    _TEST_P1 },
+    { "J29",    "CAN0",             test_CAN0,          _TEST_P1 },
 };
 
 /****************************************************************************

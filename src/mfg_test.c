@@ -931,7 +931,7 @@ network_open(uint8_t if_type, uint8_t instance)
 
     if (if_type == NETWORK_CAN)
     {
-        sprintf(cmd, "modprobe flexcan");
+        sprintf(cmd, "canconfig can0 bitrate 500000");
         rv = execute_cmd(cmd);
         if (rv < 0)
         {
@@ -1035,13 +1035,13 @@ network_close(ethIf_t *ep)
         {
             ep->flags &= ~_NET_CAN_LOADED;
 
-            sprintf(cmd, "rmmod flexcan");
-            rv = execute_cmd(cmd);
-            if (rv < 0)
-            {
-                fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
-                status = rv;
-            }
+            //sprintf(cmd, "rmmod flexcan");
+            //rv = execute_cmd(cmd);
+            //if (rv < 0)
+            //{
+            //    fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+            //    status = rv;
+            //}
         }
 
         free(ep);

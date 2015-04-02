@@ -22,6 +22,8 @@
 #include <sys/socket.h>
 #include <net/if.h>
 #include <linux/can.h>
+#include <asm-generic/ioctls.h>
+#include <linux/serial.h>
 
 #define VERSION     "0.9a"
 
@@ -138,6 +140,7 @@ struct {
     }           usbotg;
     uint8_t     rtc_if;
     uint32_t    rs485_baud;
+    bool		rs485_half;
     uint32_t    rs232_baud;
     uint32_t    buffer_size;
     char       *i2c_path;
@@ -168,6 +171,7 @@ struct {
     },
     .rtc_if = NETWORK_USBOTG,
     .rs485_baud = B4000000,
+    .rs485_half = FALSE,
     .rs232_baud = B1152000,
     .buffer_size = 512,
     .i2c_path = "/dev/i2c-1",
@@ -1013,7 +1017,8 @@ test_serial(const char *devices[], uint32_t baud_key)
     int x;
     int devIdx;
     int nbytes;
-    struct termios tcs[2];
+    struct termios tcs[2], otcs[2];
+    struct serial_rs485 rs485conf;
     struct timeval timeout;
     bool done;
     uint8_t *test_buf = NULL;
@@ -1042,6 +1047,7 @@ test_serial(const char *devices[], uint32_t baud_key)
         }
 
         rv = ioctl(fd[x], TCGETS, &(tcs[x]));
+        memcpy(&(tcs[x]), &(otcs[x]), sizeof(struct termios));
         if (rv < 0)
         {
             fprintf(stderr, "Error: %s: ioctl(TCGETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
@@ -1059,6 +1065,23 @@ test_serial(const char *devices[], uint32_t baud_key)
         tcs[x].c_oflag = (0);
         tcs[x].c_lflag = (0);
         tcs[x].c_cflag = (HUPCL | CREAD | CLOCAL | CS8 | baud_key);
+
+        if (g_info.rs485_half) {
+			if (g_info.verbose) fprintf(stdout, "Debug: %s: Enable Rs485 Half Duplex.\n", __FUNCTION__);
+			/* Enable RS-485 mode: */
+			rs485conf.flags |= SER_RS485_ENABLED;
+
+			/* Set rts/txen delay before send, if needed: (in microseconds) */
+			rs485conf.delay_rts_before_send = 0;
+
+			/* Set rts/txen delay after send, if needed: (in microseconds) */
+			rs485conf.delay_rts_after_send = 0;
+
+			/* Write the current state of the RS-485 options with ioctl. */
+			if (ioctl (fd[x], TIOCSRS485, &rs485conf) < 0) {
+				fprintf(stderr, "Error: %s: ioctl(TCGETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+			}
+		}
 
         if (g_info.verbose) fprintf(stdout, "Debug: %s: Setting %s baud rate to %s.\n", __FUNCTION__, devices[x], baud_key_to_str(baud_key));
 
@@ -1248,7 +1271,7 @@ e_test_serial:
         if (fd[x] != -1)
         {
             /* Restore terminal setup */
-            rv = ioctl(fd[x], TCSETS, &(tcs[x]));
+            rv = ioctl(fd[x], TCSETS, &(otcs[x]));
             if (rv < 0)
             {
                 fprintf(stderr, "Warning: %s: ioctl(TCSETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
@@ -3616,6 +3639,7 @@ usage(const char *prog_name)
     fprintf(stdout, "                               {mac_addr} (%s:xx:xx:xx), or if not specified, the\n", DbgOctet(reach_oui, NELEM(reach_oui), NULL, 0));
     fprintf(stdout, "                               MAC address will be read use the USB barcode scanner\n");
     fprintf(stdout, "  --rs485-baud={baud_rate}     Set RS485 baud rate (default:%s)\n", baud_key_to_str(g_info.rs485_baud));
+    fprintf(stdout, "  --rs485-half                 Set RS485 half-duplex (default:%d)\n", g_info.rs485_half);
     fprintf(stdout, "  --rs232-baud={baud_rate}     Set RS232 baud rate (default:%s)\n", baud_key_to_str(g_info.rs232_baud));
     fprintf(stdout, "  --buffer-size={buf_size}     Set test buffer size (default:%u)\n", g_info.buffer_size);
     fprintf(stdout, "  --i2c-addr={i2c_addr}        Set the I2C device address (default:0x%02X)\n", g_info.i2c_test_addr);
@@ -3655,6 +3679,7 @@ main(int argc, char *argv[])
         { "list-tests",  no_argument,        0, 0 },
         { "mac-address", optional_argument,  0, 0 },
         { "rs485-baud",  required_argument,  0, 0 },
+        { "rs485-half",  no_argument,        0, 0 },
         { "rs232-baud",  required_argument,  0, 0 },
         { "buffer-size", required_argument,  0, 0 },
         { "i2c-addr",    required_argument,  0, 0 },
@@ -3747,42 +3772,46 @@ main(int argc, char *argv[])
                 }
                 break;
 
-            case 10: // rs232-baud
+            case 10: // rs485-half
+                g_info.rs485_half = TRUE;
+                break;
+
+            case 11: // rs232-baud
                 if (optarg)
                 {
                     g_info.rs232_baud = baud_str_to_key(optarg);
                 }
                 break;
 
-            case 11: // buffer-size
+            case 12: // buffer-size
                 if (optarg)
                 {
                     g_info.buffer_size = strtoul(optarg, NULL, 0);
                 }
                 break;
 
-            case 12: // i2c-addr
+            case 13: // i2c-addr
                 if (optarg)
                 {
                     g_info.i2c_test_addr = (uint8_t) strtoul(optarg, NULL, 0);
                 }
                 break;
 
-            case 13: // i2c-offset
+            case 14: // i2c-offset
                 if (optarg)
                 {
                     g_info.i2c_test_offset = (uint8_t) strtoul(optarg, NULL, 0);
                 }
                 break;
 
-            case 14: // spi-bus
+            case 15: // spi-bus
                 if (optarg)
                 {
                     g_info.spi_bus = (uint8_t) strtoul(optarg, NULL, 0);
                 }
                 break;
 
-            case 15: // rtc-if
+            case 16: // rtc-if
                 if (optarg)
                 {
                     for (x = 0; x < NELEM(RtcIfList); x++)
@@ -3801,14 +3830,14 @@ main(int argc, char *argv[])
                 }
                 break;
 
-            case 16: // repeat
+            case 17: // repeat
                 if (optarg)
                 {
                     g_info.repeat = strtoul(optarg, NULL, 0);
                 }
                 break;
                 
-            case 17: // image-dir
+            case 18: // image-dir
                 if (optarg)
                 {
                     g_info.image_dir = strdup(optarg);

@@ -17,13 +17,14 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <linux/spi/spidev.h>
-#include <linux/i2c-dev-user.h>
 #include <linux/input.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <linux/can.h>
 #include <asm-generic/ioctls.h>
 #include <linux/serial.h>
+
+#include "linux/i2c-dev.h"
 
 #define VERSION     "0.9a"
 

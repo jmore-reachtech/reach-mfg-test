@@ -4,6 +4,8 @@ headers =
 
 CFLAGS=-Wall
 
+INC = -I./include
+
 ifeq ($(DEBUG_DEF),1)
 	DEBUG = -g -O0 -DDEBUG
 else
@@ -13,7 +15,7 @@ endif
 all: mfg-test
 
 mfg-test: $(sources) $(headers)
-	$(CC) -DAPP_VERSION='"$(APP_VERSION)"' $(CFLAGS) $(LDFLAGS) $(DEBUG) -o $@ $(sources)
+	$(CC) -DAPP_VERSION='"$(APP_VERSION)"' $(CFLAGS) $(INC) $(LDFLAGS) $(DEBUG) -o $@ $(sources)
 
 clean:
 	$(RM) mfg-test

@@ -181,7 +181,7 @@ struct {
     .i2c_gpio_addr = 0x3E,
     .i2c_gpio_offset = 0x00,
     .spi_bus = 1,
-    .image_dir = "/home/root/",
+    .image_dir = "/usr/share/mfg-test/",
 };
 
 static int execute_cmd_ex(const char *cmd, char *result, int result_size);

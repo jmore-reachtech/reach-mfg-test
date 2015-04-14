@@ -29,18 +29,36 @@
 #define VERSION     "0.9a"
 
 typedef struct {
-   unsigned int width;
-   unsigned int height;
-   unsigned int planes;
-   unsigned short bitcount;
-   unsigned int size;
-   unsigned int offset;
+    uint8_t     magic[2];   /* BM is all we support */
+    uint32_t    filesz;     /* size of the file in bytes*/
+    uint16_t    reserved1;  /* reserved */
+    uint16_t    reserved2;  /* reserved */
+    uint32_t    offset;     /* offset to bitmap data */
+} BITMAPFILEHEADER;
+
+typedef struct {
+    uint32_t header_sz;     /* the size of this header */
+    uint32_t width;         /* the bitmap width in pixels */
+    uint32_t height;        /* the bitmap height in pixels */
+    uint16_t nplanes;       /* the number of color planes being used. */
+    uint16_t depth;         /* the number of bits per pixel */
+    uint32_t compress_type; /* the compression method being used */
+    uint32_t bmp_bytesz;    /* the size of the raw bitmap data */
+    uint32_t hres;          /* the horizontal resolution of the image.
+                             (pixel per meter) */
+    uint32_t vres;          /* the vertical resolution of the image.
+                             (pixel per meter) */
+    uint32_t ncolors;       /* the number of colors in the color palette,
+                             or 0 to default to 2<sup><i>n</i></sup>. */
+    uint32_t nimpcolors;    /* the number of important colors used,
+                             or 0 when every color is important;
+                             generally ignored. */
 } BITMAPINFOHEADER;
 
 typedef struct {
-   unsigned char blue;
-   unsigned char green;
-   unsigned char red;
+    uint8_t blue;
+    uint8_t green;
+    uint8_t red;
 } PIXEL;
 
 typedef int     bool;
@@ -151,6 +169,7 @@ struct {
     uint8_t     i2c_gpio_offset;
     uint8_t     spi_bus;
     char	   *image_dir;
+    char	   *splash_image;
 } g_info = {
     .debug = 0x0,
     .verbose = FALSE,
@@ -182,6 +201,7 @@ struct {
     .i2c_gpio_offset = 0x00,
     .spi_bus = 1,
     .image_dir = "/usr/share/mfg-test/",
+    .splash_image = "/usr/share/mfg-test/splash.bmp",
 };
 
 static int execute_cmd_ex(const char *cmd, char *result, int result_size);
@@ -302,47 +322,71 @@ struct fb_var_screeninfo {
 #define FBIOPUT_VSCREENINFO	0x4601
 #define FBIOGET_FSCREENINFO	0x4602
 
+static void prompt_user(void)
+{
+	int tfd 				= 0;
+    char buf[8];
+    size_t nbytes			= 0;
+	ssize_t bytes_read		= 0;
+
+	/* open stdin */
+    tfd = open("/dev/stdin", 0);
+    if (tfd == -1) {
+        perror("Error: cannot open stdin");
+        exit(1);
+    }
+
+    printf("Press any key to continue...\n");
+    nbytes = sizeof(buf);
+    bytes_read = read(tfd, buf, nbytes);
+    if (g_info.verbose) {
+		fprintf(stdout, "Debug: %s: Read %d bytes.\n", __FUNCTION__,bytes_read);
+	}
+
+    close(tfd);
+}
+
 /****************************************************************************
  * fbimage
  */
 int fbimage(char *image_path)
 {
     int fbfd 				= 0;
-    int tfd 				= 0;
-    char buf[8];
-    size_t nbytes			= 0;
-	ssize_t bytes_read		= 0;
     struct fb_var_screeninfo vinfo;
     struct fb_fix_screeninfo finfo;
     long int screensize 	= 0;
     char *fbp 				= 0;
-    int x = 0, y 			= 0;
+    int x                   = 0;
+    int y			        = 0;
+    int j			        = 0;
     long int location 		= 0;
+    int ret					= 0;
 
     FILE *image;
+    BITMAPFILEHEADER bfh;
     BITMAPINFOHEADER bih;
+
+    memset(&bfh,0,sizeof(BITMAPFILEHEADER));
+    memset(&bih,0,sizeof(BITMAPINFOHEADER));
 
     /* Open the file for reading and writing */
     fbfd = open("/dev/fb0", O_RDWR);
     if (fbfd == -1) {
         perror("Error: cannot open framebuffer device");
-        exit(1);
+        return 1;
     }
-    /* printf("The framebuffer device was opened successfully.\n"); */
 
     /* Get fixed screen information */
     if (ioctl(fbfd, FBIOGET_FSCREENINFO, &finfo) == -1) {
         perror("Error reading fixed information");
-        exit(2);
+        return 1;
     }
 
     /* Get variable screen information */
     if (ioctl(fbfd, FBIOGET_VSCREENINFO, &vinfo) == -1) {
         perror("Error reading variable information");
-        exit(3);
+        return 1;
     }
-
-    /* printf("%dx%d, %dbpp\n", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel); */
 
     /* Figure out the size of the screen in bytes */
     screensize = vinfo.xres * vinfo.yres * vinfo.bits_per_pixel / 8;
@@ -351,12 +395,9 @@ int fbimage(char *image_path)
     fbp = (char *)mmap(0, screensize, PROT_READ | PROT_WRITE, MAP_SHARED, fbfd, 0);
     if ((int)fbp == -1) {
         perror("Error: failed to map framebuffer device to memory");
-        exit(4);
+        return 1;
     }
 
-	if(g_info.debug) {
-		printf("Opening file: %s\n", image_path);
-	}
     if(!(image = fopen(image_path, "rb+")))
     {
         printf("Error opening image file!\n");
@@ -365,44 +406,83 @@ int fbimage(char *image_path)
         return 1;
     }
 
-    /* Get the size of the file */
+    fread(&bfh.magic,2,1,image);
+
     fseek(image,2,SEEK_SET);
-    fread(&bih.size,4,1,image);
-    //printf("Size=%d\n",bih.size);
+    fread(&bfh.filesz,4,1,image);
+
+    fseek(image,10,SEEK_SET);
+    fread(&bfh.offset,4,1,image);
+
+    fseek(image,14,SEEK_SET);
+    fread(&bih.header_sz,4,1,image);
+
     fseek(image,18,SEEK_SET);
     fread(&bih.width,4,1,image);
+
     fseek(image,22,SEEK_SET);
     fread(&bih.height,4,1,image);
-    //printf("Width=%d\tHeight=%d\n",bih.width,bih.height);
+
     fseek(image,26,SEEK_SET);
-    fread(&bih.planes,2,1,image);
-    //printf("Number of planes:%d\n",bih.planes);
+    fread(&bih.nplanes,2,1,image);
+
     fseek(image,28,SEEK_SET);
-    fread(&bih.bitcount,2,1,image);
-    //printf("Bit Count:%d\n",bih.bitcount);
-    fseek(image,10,SEEK_SET);
-    fread(&bih.offset,4,1,image);
-    //printf("Offset:%d\n",bih.offset);
+    fread(&bih.depth,2,1,image);
 
-    PIXEL pic[bih.width*bih.height*2],p;
+    fseek(image,30,SEEK_SET);
+    fread(&bih.compress_type,4,1,image);
 
+	/*
+    printf("***********************************\n");
+    printf("Type:\t\t\t%c%c \n",bfh.magic[0], bfh.magic[1]);
+    printf("File Size:\t\t%d \n",bfh.filesz);
+    printf("Data Offset:\t\t%d\n",bfh.offset);
+    printf("Header Size:\t\t%d \n",bih.header_sz);
+    printf("Height:\t\t\t%d \n",bih.height);
+    printf("Width:\t\t\t%d \n",bih.width);
+    printf("Number of planes:\t%d\n",bih.nplanes);
+    printf("Bit Count:\t\t%d\n",bih.depth);
+    printf("Compression:\t\t%d\n",bih.compress_type);
+    printf("***********************************\n");
+    */
 
-    fseek(image,bih.offset,SEEK_SET);
+    int padding = 0;
+    int scanlinebytes = bih.width * 3;
+    while ((scanlinebytes + padding ) % 4 != 0)
+        padding++;
+    int psw = scanlinebytes + padding;
 
-    int j=0;
-    uint counter;
-    for (counter = 0; counter <= (bih.size-54); counter += 3)
-    {
-        fread(&p,sizeof(p),1,image);
+	/*
+    row_size = ((bih.depth * bih.width + 31) / 32) * 4;
+    pixel_buf = row_size * abs(bih.height);
+    printf("row_size = %d, pixel_buf = %d, line = %d, psw = %d \n"
+        , row_size , pixel_buf, finfo.line_length, psw);
+    */
 
-        if(!feof(image))
-        {
-            pic[j]=p;
-            //printf("%d= %d %d %d ",j+54,pic[j].blue,pic[j].green,pic[j].red);
-            j++;
+    fseek(image,bfh.offset,SEEK_SET);
+    uint8_t buffer[bfh.filesz - bfh.offset];
+    ret = fread(&buffer, 1, sizeof(buffer), image);
+    if (ret != sizeof(buffer)) {
+		perror("Image read mismatch!");
+	}
+
+    uint8_t newbuf[bih.width * bih.height * 3];
+    long int bufpos = 0;
+    long int newpos = 0;
+    for (y = 0; y < bih.height; y++) {
+        for (x = 0; x < 3 * bih.width; x += 3) {
+            newpos = y * 3 * bih.width + x;
+			bufpos = ( bih.height - y - 1 ) * psw + x;
+
+			newbuf[newpos] = buffer[bufpos + 2];
+			newbuf[newpos + 1] = buffer[bufpos+1];
+			newbuf[newpos + 2] = buffer[bufpos];
         }
     }
 
+    location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) +
+        (y+vinfo.yoffset) * finfo.line_length;
+  
     j=0;
     // Figure out where in memory to put the pixel
     for (y = 0; y < bih.height; y++) {
@@ -411,41 +491,18 @@ int fbimage(char *image_path)
             location = (x+vinfo.xoffset) * (vinfo.bits_per_pixel/8) +
                        (y+vinfo.yoffset) * finfo.line_length;
 
-            if (vinfo.bits_per_pixel == 32) {
-                *(fbp + location) = pic[j].blue;        // Blue
-                *(fbp + location + 1) = pic[j].green;   // Green
-                *(fbp + location + 2) = pic[j].red;     // Red
-                *(fbp + location + 3) = 0;      // No transparency
-            } else { //assume 16bpp
-                int b = pic[j].blue;
-                int g = pic[j].green;
-                int r = pic[j].red;
-                unsigned short int t = (b<<8 & 0xf800) | (g << 3 & 0x7e0) | (r >> 3);
-                *((unsigned short int*)(fbp + location)) = t; 
-            }
-            j++; //increment pixel pointer.
+            *(fbp + location) = newbuf[j + 2];
+            *(fbp + location + 1) = newbuf[j + 1];
+            *(fbp + location + 2) = newbuf[j];
+            *(fbp + location + 3) = 0;      // No transparency
+            j += 3; //increment pixel pointer.
         }
     }
-    fclose(image);
 
+    fclose(image);
     munmap(fbp, screensize);
     close(fbfd);
-    
-    /* open stdin */
-    tfd = open("/dev/stdin", 0);
-    if (tfd == -1) {
-        perror("Error: cannot open stdin");
-        exit(1);
-    }
-    
-    printf("Press any key to continue...\n");
-    nbytes = sizeof(buf);
-    bytes_read = read(tfd, buf, nbytes);
-    if (g_info.verbose) { 
-		fprintf(stdout, "Debug: %s: Read %d bytes.\n", __FUNCTION__,bytes_read);
-	}
-            
-    close(tfd);
+
     return 0;
 }
 
@@ -2928,6 +2985,7 @@ test_LCD(void)
     strcat(image,"blackToRGB.bmp");
     
     status = fbimage(image);
+    prompt_user();
     
     image[0] = '\0';
     fbutil(0x0,0x0,0x0);
@@ -2937,6 +2995,7 @@ test_LCD(void)
     strcat(image,"pattern.bmp");
     
     status = fbimage(image);
+    prompt_user();
     
     image[0] = '\0';
     fbutil(0x0,0x0,0x0);
@@ -2946,6 +3005,7 @@ test_LCD(void)
     strcat(image,"black.bmp");
     
     status = fbimage(image);
+    prompt_user();
     
     image[0] = '\0';
     fbutil(0x0,0x0,0x0);
@@ -2955,6 +3015,7 @@ test_LCD(void)
     strcat(image,"white.bmp");
     
     status = fbimage(image);
+    prompt_user();
     
     image[0] = '\0';
     fbutil(0x0,0x0,0x0);
@@ -3590,6 +3651,11 @@ e_assign_MacAddress:
     return status;
 }
 
+static void splash_image(void)
+{
+	fbimage(g_info.splash_image);
+}
+
 struct {
     const char *part;
     const char *name;
@@ -3650,6 +3716,7 @@ usage(const char *prog_name)
     fprintf(stdout, "  --repeat={n_repeat}          Repeat the list of tests (default:%d)\n", g_info.repeat);
     fprintf(stdout, "  --dry-run                    Do not perform OTP write of MAC address or other permanent changes.\n");
     fprintf(stdout, "  --image-dir={path}           Directory with framebuffer test images.\n");
+    fprintf(stdout, "  --splash                     Splash image to the framebuffer.\n");
     fprintf(stdout, "  --version                    Display version information and exit\n");
 }
 
@@ -3689,6 +3756,7 @@ main(int argc, char *argv[])
         { "rtc-if",      required_argument,  0, 0 },
         { "repeat",      required_argument,  0, 0 },
         { "image-dir",   required_argument,  0, 0 },
+        { "splash",      optional_argument,  0, 0 },
         { "help",        no_argument,        0, 'h' },
         { 0, 0, 0, 0 },
     };
@@ -3843,6 +3911,16 @@ main(int argc, char *argv[])
                 {
                     g_info.image_dir = strdup(optarg);
                 }
+                break;
+
+             case 19: // splash
+                if (optarg)
+                {
+                    g_info.splash_image = strdup(optarg);
+                }
+                splash_image();
+                ret = 0;
+                goto e_main;
                 break;
 
             default:

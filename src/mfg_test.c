@@ -2706,146 +2706,146 @@ e_test_UsbDiskDrive:
 /****************************************************************************
  * test_UsbBarcodeScanner
  */
-static int
-test_UsbBarcodeScanner(void)
-{
-    int status = 0;
-    int rv = 0;
-    char buf[128];
-    uint8_t blen;
+//static int
+//test_UsbBarcodeScanner(void)
+//{
+    //int status = 0;
+    //int rv = 0;
+    //char buf[128];
+    //uint8_t blen;
 
-    // Target
-    //   Read any barcode using the USB barcode scanner
+    //// Target
+    ////   Read any barcode using the USB barcode scanner
 
-    if (g_info.verbose) fprintf(stdout, "Debug: %s: Test USB port with USB Barcode Scanner.\n", __FUNCTION__);
+    //if (g_info.verbose) fprintf(stdout, "Debug: %s: Test USB port with USB Barcode Scanner.\n", __FUNCTION__);
 
-    fprintf(stdout, "User: Scan any barcode to complete test.\n");
-    blen = sizeof(buf);
-    rv = barcode_read(buf, &blen, 10 * 1000 * 1000);
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: barcode_read() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
-        status = rv;
-        goto e_test_UsbBarcodeScanner;
-    }
-    if (g_info.verbose) fprintf(stdout, "Debug: %s: Barcode Scanner returned '%s'[%d]\n", __FUNCTION__, DbgDataToString(buf, 0, blen, NULL, 0), blen);
+    //fprintf(stdout, "User: Scan any barcode to complete test.\n");
+    //blen = sizeof(buf);
+    //rv = barcode_read(buf, &blen, 10 * 1000 * 1000);
+    //if (rv < 0)
+    //{
+        //fprintf(stderr, "Error: %s: barcode_read() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        //status = rv;
+        //goto e_test_UsbBarcodeScanner;
+    //}
+    //if (g_info.verbose) fprintf(stdout, "Debug: %s: Barcode Scanner returned '%s'[%d]\n", __FUNCTION__, DbgDataToString(buf, 0, blen, NULL, 0), blen);
 
-e_test_UsbBarcodeScanner:
+//e_test_UsbBarcodeScanner:
 
-    return status;
-}
+    //return status;
+//}
 
 /****************************************************************************
  * test_UsbSerial
  */
-static int
-test_UsbSerial(void)
-{
-    const char *devices[] = { "/dev/ttyUSB0", "/dev/ttySP1" };
+//static int
+//test_UsbSerial(void)
+//{
+    //const char *devices[] = { "/dev/ttyUSB0", "/dev/ttySP1" };
 
-    //DWG J4:USB1 w/ USB-to-Serial:/dev/ttyUSB0 <==> J3:AUART1:/dev/ttySP1
+    ////DWG J4:USB1 w/ USB-to-Serial:/dev/ttyUSB0 <==> J3:AUART1:/dev/ttySP1
 
-    if (g_info.verbose) fprintf(stdout, "Debug: %s: Test USB port with USB Serial device.\n", __FUNCTION__);
+    //if (g_info.verbose) fprintf(stdout, "Debug: %s: Test USB port with USB Serial device.\n", __FUNCTION__);
 
-    return test_serial(devices, g_info.rs232_baud);
-}
+    //return test_serial(devices, g_info.rs232_baud);
+//}
 
 /****************************************************************************
  * scan_usb_devices
  */
-static int
-scan_usb_devices(void)
-{
-    int status = 0;
-    char cmd[128];
-    char response[2048];
-    uint8_t usb_devices[8];
-    int rv = 0;
+//static int
+//scan_usb_devices(void)
+//{
+    //int status = 0;
+    //char cmd[128];
+    //char response[2048];
+    //uint8_t usb_devices[8];
+    //int rv = 0;
 
-    /* Scan already complete. No need to rescan. */
-    if (NumUsbList != 0)
-    {
-        goto e_scan_usb_devices;
-    }
+    ///* Scan already complete. No need to rescan. */
+    //if (NumUsbList != 0)
+    //{
+        //goto e_scan_usb_devices;
+    //}
 
-    memset(usb_devices, 0, sizeof(usb_devices));
+    //memset(usb_devices, 0, sizeof(usb_devices));
 
-    sprintf(cmd, "lsusb -v | grep -e iProduct -e bInterfaceClass");
-    rv = execute_cmd_ex(cmd, response, sizeof(response));
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: execute_cmd_ex('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
-        status = rv;
-        goto e_scan_usb_devices;
-    }
+    //sprintf(cmd, "lsusb -v | grep -e iProduct -e bInterfaceClass");
+    //rv = execute_cmd_ex(cmd, response, sizeof(response));
+    //if (rv < 0)
+    //{
+        //fprintf(stderr, "Error: %s: execute_cmd_ex('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+        //status = rv;
+        //goto e_scan_usb_devices;
+    //}
 
-    /*
-     * Response from the command:
-     *   iProduct                2 Freescale On-Chip EHCI Host Controller
-     *       bInterfaceClass         9 Hub
-     *   iProduct                0 
-     *       bInterfaceClass         9 Hub
-     *       bInterfaceClass         9 Hub
-     *   iProduct                0 
-     *       bInterfaceClass         9 Hub
-     *       bInterfaceClass         9 Hub
-     *   iProduct                2 usb serial converter
-     *       bInterfaceClass       255 Vendor Specific Class
-     *   iProduct                2 Patriot Memory
-     *       bInterfaceClass         8 Mass Storage
-     *   iProduct                4 USB Storage
-     *       bInterfaceClass         8 Mass Storage
-     *   iProduct                2 Handheld Barcode Scanner
-     *       bInterfaceClass         3 Human Interface Device
-     */
+    ///*
+     //* Response from the command:
+     //*   iProduct                2 Freescale On-Chip EHCI Host Controller
+     //*       bInterfaceClass         9 Hub
+     //*   iProduct                0 
+     //*       bInterfaceClass         9 Hub
+     //*       bInterfaceClass         9 Hub
+     //*   iProduct                0 
+     //*       bInterfaceClass         9 Hub
+     //*       bInterfaceClass         9 Hub
+     //*   iProduct                2 usb serial converter
+     //*       bInterfaceClass       255 Vendor Specific Class
+     //*   iProduct                2 Patriot Memory
+     //*       bInterfaceClass         8 Mass Storage
+     //*   iProduct                4 USB Storage
+     //*       bInterfaceClass         8 Mass Storage
+     //*   iProduct                2 Handheld Barcode Scanner
+     //*       bInterfaceClass         3 Human Interface Device
+     //*/
 
-    char *p;
-    for (p = strtok(response, "\n"); p != NULL; p = strtok(NULL, "\n"))
-    {
-        if (strstr(p, "Hub") != NULL)
-        {
-            continue;
-        }
+    //char *p;
+    //for (p = strtok(response, "\n"); p != NULL; p = strtok(NULL, "\n"))
+    //{
+        //if (strstr(p, "Hub") != NULL)
+        //{
+            //continue;
+        //}
 
-        if (strcasestr(p, "serial") != NULL)
-        {
-            usb_devices[_USB_SERIAL]++;
-            continue;
-        }
-        if (strstr(p, "Mass Storage") != NULL)
-        {
-            usb_devices[_USB_MASS_STORAGE]++;
-            continue;
-        }
-        if (strstr(p, "Barcode Scanner") != NULL)
-        {
-            usb_devices[_USB_BARCODE_SCANNER]++;
-            continue;
-        }
-    }
+        //if (strcasestr(p, "serial") != NULL)
+        //{
+            //usb_devices[_USB_SERIAL]++;
+            //continue;
+        //}
+        //if (strstr(p, "Mass Storage") != NULL)
+        //{
+            //usb_devices[_USB_MASS_STORAGE]++;
+            //continue;
+        //}
+        //if (strstr(p, "Barcode Scanner") != NULL)
+        //{
+            //usb_devices[_USB_BARCODE_SCANNER]++;
+            //continue;
+        //}
+    //}
 
-    NumUsbList = 0;
-    if (usb_devices[_USB_SERIAL])
-    {
-        UsbList[NumUsbList++] = (_USB_SERIAL << 1);
-    }
-    if (usb_devices[_USB_MASS_STORAGE] > 0)
-    {
-        UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1);
-    }
-    if (usb_devices[_USB_MASS_STORAGE] > 1)
-    {
-        UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1) | 1;
-    }
-    if (usb_devices[_USB_BARCODE_SCANNER])
-    {
-        UsbList[NumUsbList++] = (_USB_BARCODE_SCANNER << 1);
-    }
+    //NumUsbList = 0;
+    //if (usb_devices[_USB_SERIAL])
+    //{
+        //UsbList[NumUsbList++] = (_USB_SERIAL << 1);
+    //}
+    //if (usb_devices[_USB_MASS_STORAGE] > 0)
+    //{
+        //UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1);
+    //}
+    //if (usb_devices[_USB_MASS_STORAGE] > 1)
+    //{
+        //UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1) | 1;
+    //}
+    //if (usb_devices[_USB_BARCODE_SCANNER])
+    //{
+        //UsbList[NumUsbList++] = (_USB_BARCODE_SCANNER << 1);
+    //}
 
-e_scan_usb_devices:
+//e_scan_usb_devices:
 
-    return status;
-}
+    //return status;
+//}
 
 /****************************************************************************
  * test_USB1
@@ -2854,42 +2854,45 @@ static int
 test_USB1(void)
 {
     int status = 0;
-    int rv = 0;
+    //int rv = 0;
 
     //DWG J4:USB1
 
-    rv = scan_usb_devices();
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
-        status = -1;
-        goto e_test_USB1;
-    }
+    //rv = scan_usb_devices();
+    //if (rv < 0)
+    //{
+        //fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
+        //status = -1;
+        //goto e_test_USB1;
+    //}
 
-    if (NumUsbList <= 0)
-    {
-        fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
-        status = 1;
-        goto e_test_USB1;
-    }
+    //if (NumUsbList <= 0)
+    //{
+        //fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
+        //status = 1;
+        //goto e_test_USB1;
+    //}
 
-    int n = 0;
-    switch (UsbList[n] >> 1)
-    {
-    case _USB_SERIAL:
-        status = test_UsbSerial();
-        break;
+    //int n = 0;
+    //switch (UsbList[n] >> 1)
+    //{
+    //case _USB_SERIAL:
+        //status = test_UsbSerial();
+        //break;
 
-    case _USB_MASS_STORAGE:
-        status = test_UsbDiskDrive(UsbList[n] & 0x01);
-        break;
+    //case _USB_MASS_STORAGE:
+        //status = test_UsbDiskDrive(UsbList[n] & 0x01);
+        //break;
 
-    case _USB_BARCODE_SCANNER:
-        status = test_UsbBarcodeScanner();
-        break;
-    }
+    //case _USB_BARCODE_SCANNER:
+        //status = test_UsbBarcodeScanner();
+        //break;
+    //}
+    
+    /* this will test /dev/sda */
+    status = test_UsbDiskDrive(0);
 
-e_test_USB1:
+//e_test_USB1:
 
     return status;
 }
@@ -2901,42 +2904,45 @@ static int
 test_USB2(void)
 {
     int status = 0;
-    int rv = 0;
+    //int rv = 0;
 
     //DWG J1:USB2
 
-    rv = scan_usb_devices();
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
-        status = -1;
-        goto e_test_USB2;
-    }
+    //rv = scan_usb_devices();
+    //if (rv < 0)
+    //{
+        //fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
+        //status = -1;
+        //goto e_test_USB2;
+    //}
 
-    if (NumUsbList <= 1)
-    {
-        fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 2nd USB device.\n", __FUNCTION__, NumUsbList);
-        status = 1;
-        goto e_test_USB2;
-    }
+    //if (NumUsbList <= 1)
+    //{
+        //fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 2nd USB device.\n", __FUNCTION__, NumUsbList);
+        //status = 1;
+        //goto e_test_USB2;
+    //}
 
-    int n = 1;
-    switch (UsbList[n] >> 1)
-    {
-    case _USB_SERIAL:
-        status = test_UsbSerial();
-        break;
+    //int n = 1;
+    //switch (UsbList[n] >> 1)
+    //{
+    //case _USB_SERIAL:
+        //status = test_UsbSerial();
+        //break;
 
-    case _USB_MASS_STORAGE:
-        status = test_UsbDiskDrive(UsbList[n] & 0x01);
-        break;
+    //case _USB_MASS_STORAGE:
+        //status = test_UsbDiskDrive(UsbList[n] & 0x01);
+        //break;
 
-    case _USB_BARCODE_SCANNER:
-        status = test_UsbBarcodeScanner();
-        break;
-    }
+    //case _USB_BARCODE_SCANNER:
+        //status = test_UsbBarcodeScanner();
+        //break;
+    //}
+    
+    /* this will test /dev/sdb */
+    status = test_UsbDiskDrive(1);
 
-e_test_USB2:
+//e_test_USB2:
 
     return status;
 }

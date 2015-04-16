@@ -26,8 +26,6 @@
 
 #include "linux/i2c-dev.h"
 
-#define VERSION     "0.9a"
-
 typedef struct {
     uint8_t     magic[2];   /* BM is all we support */
     uint32_t    filesz;     /* size of the file in bytes*/
@@ -3791,7 +3789,7 @@ main(int argc, char *argv[])
                 break;
 
             case 1: // version
-                fprintf(stdout, "%s: Version %s\n", argv[0], VERSION);
+                fprintf(stdout, "%s\n", APP_VERSION);
                 ret = 0;
                 goto e_main;
                 break;

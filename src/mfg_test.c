@@ -334,7 +334,7 @@ static void prompt_user(void)
         exit(1);
     }
 
-    printf("Press any key to continue...\n");
+	fprintf(stdout, "User: Press [Enter] to continue.\n");
     nbytes = sizeof(buf);
     bytes_read = read(tfd, buf, nbytes);
     if (g_info.verbose) {

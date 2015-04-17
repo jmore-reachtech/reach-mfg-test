@@ -17,13 +17,12 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <linux/spi/spidev.h>
-#include <linux/i2c-dev-user.h>
 #include <linux/input.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <linux/can.h>
 
-#define VERSION     "0.9a"
+#include "linux/i2c-dev.h"
 
 typedef int     bool;
 #define TRUE    1
@@ -2793,7 +2792,7 @@ main(int argc, char *argv[])
                 break;
 
             case 1: // version
-                fprintf(stdout, "%s: Version %s\n", argv[0], VERSION);
+                fprintf(stdout, "%s\n", APP_VERSION);
                 ret = 0;
                 goto e_main;
                 break;

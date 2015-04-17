@@ -131,6 +131,7 @@ struct {
     uint8_t     i2c_gpio_offset;
     uint8_t     spi_bus;
     char	   *image_dir;
+    char	   *splash_image;
 } g_info = {
     .debug = 0x0,
     .verbose = FALSE,
@@ -160,7 +161,8 @@ struct {
     .i2c_gpio_addr = 0x3E,
     .i2c_gpio_offset = 0x00,
     .spi_bus = 1,
-    .image_dir = "/home/root/",
+    .image_dir = "/usr/share/mfg-test/",
+    .splash_image = "/usr/share/mfg-test/fruit_girl.bmp",
 };
 
 static int execute_cmd_ex(const char *cmd, char *result, int result_size);
@@ -313,6 +315,29 @@ typedef struct {
     uint8_t red;
 } PIXEL;
 
+static void prompt_user(void)
+{
+	int tfd 				= 0;
+    char buf[8];
+    size_t nbytes			= 0;
+	ssize_t bytes_read		= 0;
+
+	/* open stdin */
+    tfd = open("/dev/stdin", 0);
+    if (tfd == -1) {
+        perror("Error: cannot open stdin");
+        exit(1);
+    }
+
+	fprintf(stdout, "User: Press [Enter] to continue.\n");
+    nbytes = sizeof(buf);
+    bytes_read = read(tfd, buf, nbytes);
+    if (g_info.verbose) {
+		fprintf(stdout, "Debug: %s: Read %d bytes.\n", __FUNCTION__,bytes_read);
+	}
+
+    close(tfd);
+}
 
 /****************************************************************************
  * fbimage
@@ -320,10 +345,6 @@ typedef struct {
 int fbimage(char *image_path)
 {
     int fbfd 				= 0;
-    int tfd 				= 0;
-    char buf[8];
-    size_t nbytes			= 0;
-	ssize_t bytes_read		= 0;
     struct fb_var_screeninfo vinfo;
     struct fb_fix_screeninfo finfo;
     long int screensize 	= 0;
@@ -475,21 +496,6 @@ int fbimage(char *image_path)
     munmap(fbp, screensize);
     close(fbfd);
 
-    /* open stdin */
-    tfd = open("/dev/stdin", 0);
-    if (tfd == -1) {
-        perror("Error: cannot open stdin");
-        return 1;
-    }
-    
-    printf("Press Enter key to continue...\n");
-    nbytes = sizeof(buf);
-    bytes_read = read(tfd, buf, nbytes);
-    if (g_info.verbose) { 
-		fprintf(stdout, "Debug: %s: Read %d bytes.\n", __FUNCTION__,bytes_read);
-	}
-            
-    close(tfd);
     return 0;
 }
 
@@ -2041,6 +2047,7 @@ test_LCD(void)
     //strcat(image,"test.bmp");
     
     status = fbimage(image);
+    prompt_user();
     
     image[0] = '\0';
     fbutil(0x0,0x0,0x0);
@@ -2687,6 +2694,11 @@ e_assign_MacAddress:
     return status;
 }
 
+static void splash_image(void)
+{
+	fbimage(g_info.splash_image);
+}
+
 struct {
     const char *part;
     const char *name;
@@ -2733,6 +2745,7 @@ usage(const char *prog_name)
     fprintf(stdout, "  --repeat={n_repeat}          Repeat the list of tests (default:%d)\n", g_info.repeat);
     fprintf(stdout, "  --dry-run                    Do not perform OTP write of MAC address or other permanent changes.\n");
     fprintf(stdout, "  --image-dir={path}           Directory with framebuffer test images.\n");
+    fprintf(stdout, "  --splash                     Splash image to the framebuffer.\n");
     fprintf(stdout, "  --version                    Display version information and exit\n");
 }
 
@@ -2764,6 +2777,7 @@ main(int argc, char *argv[])
         { "mac-address", optional_argument,  0, 0 },
         { "repeat",      required_argument,  0, 0 },
         { "image-dir",   required_argument,  0, 0 },
+        { "splash",      optional_argument,  0, 0 },
         { "help",        no_argument,        0, 'h' },
         { 0, 0, 0, 0 },
     };
@@ -2853,6 +2867,16 @@ main(int argc, char *argv[])
                 {
                     g_info.image_dir = strdup(optarg);
                 }
+                break;
+            
+            case 11: // splash
+                if (optarg)
+                {
+                    g_info.splash_image = strdup(optarg);
+                }
+                splash_image();
+                ret = 0;
+                goto e_main;
                 break;
 
             default:

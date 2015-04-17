@@ -804,77 +804,77 @@ DbgOctet(
 /****************************************************************************
  * baud_key_to_str
  */
-static const char *
-baud_key_to_str(
-    uint32_t    baud_key
-    )
-{
-    static char buffer[32] = { 0 };
-    int x;
+//static const char *
+//baud_key_to_str(
+    //uint32_t    baud_key
+    //)
+//{
+    //static char buffer[32] = { 0 };
+    //int x;
 
-    for (x = 0; x < NELEM(BaudTable); x++)
-    {
-        if (BaudTable[x].key == baud_key)
-        {
-            break;
-        }
-    }
+    //for (x = 0; x < NELEM(BaudTable); x++)
+    //{
+        //if (BaudTable[x].key == baud_key)
+        //{
+            //break;
+        //}
+    //}
 
-    if (x >= NELEM(BaudTable))
-    {
-        sprintf(buffer, "{Unknown<%06oo>}", baud_key);
-    }
-    else
-    {
-        uint32_t speed = BaudTable[x].speed;
+    //if (x >= NELEM(BaudTable))
+    //{
+        //sprintf(buffer, "{Unknown<%06oo>}", baud_key);
+    //}
+    //else
+    //{
+        //uint32_t speed = BaudTable[x].speed;
 
-        sprintf(buffer, "%ubps", speed);
-    }
+        //sprintf(buffer, "%ubps", speed);
+    //}
 
-    return buffer;
-}
+    //return buffer;
+//}
 
 /****************************************************************************
  * baud_str_to_key
  */
-static uint32_t
-baud_str_to_key(const char *baud_str)
-{
-    uint32_t baud_key = __MAX_BAUD;
-    char *baud_buf = NULL;
-    char buf[32];
-    char *bp;
-    int x;
+//static uint32_t
+//baud_str_to_key(const char *baud_str)
+//{
+    //uint32_t baud_key = __MAX_BAUD;
+    //char *baud_buf = NULL;
+    //char buf[32];
+    //char *bp;
+    //int x;
 
-    baud_buf = strdup(baud_str);
-    if ((bp = strstr(baud_buf, "bps")) != NULL)
-    {
-        *bp = '\0';
-    }
+    //baud_buf = strdup(baud_str);
+    //if ((bp = strstr(baud_buf, "bps")) != NULL)
+    //{
+        //*bp = '\0';
+    //}
 
-    for (x = 0; x < NELEM(BaudTable); x++)
-    {
-        sprintf(buf, "%u", BaudTable[x].speed);
-        if (strcasecmp(buf, baud_buf) == 0)
-        {
-            baud_key = BaudTable[x].key;
-            break;
-        }
-    }
+    //for (x = 0; x < NELEM(BaudTable); x++)
+    //{
+        //sprintf(buf, "%u", BaudTable[x].speed);
+        //if (strcasecmp(buf, baud_buf) == 0)
+        //{
+            //baud_key = BaudTable[x].key;
+            //break;
+        //}
+    //}
 
-    if (x >= NELEM(BaudTable))
-    {
-        fprintf(stderr, "Warning: Unknown baud rate '%s'. Defaulting to %s.\n", baud_str, baud_key_to_str(baud_key));
-    }
+    //if (x >= NELEM(BaudTable))
+    //{
+        //fprintf(stderr, "Warning: Unknown baud rate '%s'. Defaulting to %s.\n", baud_str, baud_key_to_str(baud_key));
+    //}
 
-    if (baud_buf != NULL)
-    {
-        free(baud_buf);
-        baud_buf = NULL;
-    }
+    //if (baud_buf != NULL)
+    //{
+        //free(baud_buf);
+        //baud_buf = NULL;
+    //}
 
-    return baud_key;
-}
+    //return baud_key;
+//}
 
 /****************************************************************************
  * network_open
@@ -1396,360 +1396,360 @@ e_test_dip:
 /****************************************************************************
  * test_serial
  */
-static int
-test_serial(const char *devices[], uint32_t baud_key)
-{
-    int status = 0;
-    int rv = 0;
-    int fd[2];
-    int x;
-    int devIdx;
-    int nbytes;
-    struct termios tcs[2];
-    struct timeval timeout;
-    bool done;
-    uint8_t *test_buf = NULL;
-    uint8_t *buf = NULL;
+//static int
+//test_serial(const char *devices[], uint32_t baud_key)
+//{
+    //int status = 0;
+    //int rv = 0;
+    //int fd[2];
+    //int x;
+    //int devIdx;
+    //int nbytes;
+    //struct termios tcs[2];
+    //struct timeval timeout;
+    //bool done;
+    //uint8_t *test_buf = NULL;
+    //uint8_t *buf = NULL;
 
-    // Target
-    //   Open both ports
-    //   Verify write on Port#0 is received on Port#1
-    //   Verify write on Port#1 is received on Port#0
+    //// Target
+    ////   Open both ports
+    ////   Verify write on Port#0 is received on Port#1
+    ////   Verify write on Port#1 is received on Port#0
 
-    for (x = 0; x < 2; x++)
-    {
-        fd[x] = -1;
-    }
+    //for (x = 0; x < 2; x++)
+    //{
+        //fd[x] = -1;
+    //}
 
-    for (x = 0; x < 2; x++)
-    {
-        int i;
+    //for (x = 0; x < 2; x++)
+    //{
+        //int i;
 
-        fd[x] = open(devices[x], O_RDWR | O_NDELAY);
-        if (fd[x] < 0)
-        {
-            fprintf(stderr, "Error: %s: open('%s') failed: %s [%d]\n", __FUNCTION__, devices[x], strerror(errno), errno);
-            status = -1;
-            goto e_test_serial;
-        }
+        //fd[x] = open(devices[x], O_RDWR | O_NDELAY);
+        //if (fd[x] < 0)
+        //{
+            //fprintf(stderr, "Error: %s: open('%s') failed: %s [%d]\n", __FUNCTION__, devices[x], strerror(errno), errno);
+            //status = -1;
+            //goto e_test_serial;
+        //}
 
-        rv = ioctl(fd[x], TCGETS, &(tcs[x]));
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: ioctl(TCGETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
-            status = rv;
-            goto e_test_serial;
-        }
+        //rv = ioctl(fd[x], TCGETS, &(tcs[x]));
+        //if (rv < 0)
+        //{
+            //fprintf(stderr, "Error: %s: ioctl(TCGETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+            //status = rv;
+            //goto e_test_serial;
+        //}
 
-        for (i = 0; i < NCCS; i++)
-        {
-            tcs[x].c_cc[i] = '\0';
-        }
-        tcs[x].c_cc[VMIN]  = 1;
-        tcs[x].c_cc[VTIME] = 0;
-        tcs[x].c_iflag = (IGNBRK | IGNPAR);
-        tcs[x].c_oflag = (0);
-        tcs[x].c_lflag = (0);
-        tcs[x].c_cflag = (HUPCL | CREAD | CLOCAL | CS8 | baud_key);
+        //for (i = 0; i < NCCS; i++)
+        //{
+            //tcs[x].c_cc[i] = '\0';
+        //}
+        //tcs[x].c_cc[VMIN]  = 1;
+        //tcs[x].c_cc[VTIME] = 0;
+        //tcs[x].c_iflag = (IGNBRK | IGNPAR);
+        //tcs[x].c_oflag = (0);
+        //tcs[x].c_lflag = (0);
+        //tcs[x].c_cflag = (HUPCL | CREAD | CLOCAL | CS8 | baud_key);
 
-        if (g_info.verbose) fprintf(stdout, "Debug: %s: Setting %s baud rate to %s.\n", __FUNCTION__, devices[x], baud_key_to_str(baud_key));
+        //if (g_info.verbose) fprintf(stdout, "Debug: %s: Setting %s baud rate to %s.\n", __FUNCTION__, devices[x], baud_key_to_str(baud_key));
 
-        rv = ioctl(fd[x], TCSETS, &(tcs[x]));
-        if (rv < 0)
-        {
-            fprintf(stderr, "Error: %s: ioctl(TCSETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
-            status = rv;
-            goto e_test_serial;
-        }
+        //rv = ioctl(fd[x], TCSETS, &(tcs[x]));
+        //if (rv < 0)
+        //{
+            //fprintf(stderr, "Error: %s: ioctl(TCSETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+            //status = rv;
+            //goto e_test_serial;
+        //}
 
-        int flags = fcntl(fd[x], F_GETFL, 0);
-        fcntl(fd[x], F_SETFL, flags & ~O_NDELAY);
-    }
+        //int flags = fcntl(fd[x], F_GETFL, 0);
+        //fcntl(fd[x], F_SETFL, flags & ~O_NDELAY);
+    //}
 
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    //timeout.tv_sec = 2;
+    //timeout.tv_usec = 0;
 
-    int test_buf_len = g_info.buffer_size;
+    //int test_buf_len = g_info.buffer_size;
     
-    if ((test_buf = malloc(test_buf_len)) == NULL)
-    {
-        fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, test_buf_len, strerror(errno), errno);
-        goto e_test_serial;
-    }
-    int buf_len = g_info.buffer_size;
+    //if ((test_buf = malloc(test_buf_len)) == NULL)
+    //{
+        //fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, test_buf_len, strerror(errno), errno);
+        //goto e_test_serial;
+    //}
+    //int buf_len = g_info.buffer_size;
     
-    if ((buf = malloc(buf_len)) == NULL)
-    {
-        fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, buf_len, strerror(errno), errno);
-        goto e_test_serial;
-    }
+    //if ((buf = malloc(buf_len)) == NULL)
+    //{
+        //fprintf(stderr, "Error: %s: malloc(%d) failed: %s [%d]\n", __FUNCTION__, buf_len, strerror(errno), errno);
+        //goto e_test_serial;
+    //}
 
-    for (x = 0; x < test_buf_len; x++)
-    {
-        test_buf[x] = (uint8_t) x;
-    }
+    //for (x = 0; x < test_buf_len; x++)
+    //{
+        //test_buf[x] = (uint8_t) x;
+    //}
 
-    devIdx = 0;
-    if (g_info.verbose) fprintf(stdout, "Debug: %s: Sending %d bytes from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
-    nbytes = write(fd[devIdx], test_buf, test_buf_len);
-    if (nbytes != test_buf_len)
-    {
-        fprintf(stderr, "Error: %s: %s sent only %d of requested %d bytes.\n", __FUNCTION__, devices[devIdx], nbytes, test_buf_len);
-        status = -1;
-        goto e_test_serial;
-    }
+    //devIdx = 0;
+    //if (g_info.verbose) fprintf(stdout, "Debug: %s: Sending %d bytes from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
+    //nbytes = write(fd[devIdx], test_buf, test_buf_len);
+    //if (nbytes != test_buf_len)
+    //{
+        //fprintf(stderr, "Error: %s: %s sent only %d of requested %d bytes.\n", __FUNCTION__, devices[devIdx], nbytes, test_buf_len);
+        //status = -1;
+        //goto e_test_serial;
+    //}
 
-    int offset = 0;
-    time_t time_expire = time(NULL) + 5;
+    //int offset = 0;
+    //time_t time_expire = time(NULL) + 5;
 
-    done = FALSE;
-    while (!done)
-    {
-        int maxFd = -1;
-        fd_set readFds;
+    //done = FALSE;
+    //while (!done)
+    //{
+        //int maxFd = -1;
+        //fd_set readFds;
 
-        FD_ZERO(&readFds);
-        for (x = 0; x < 2; x++)
-        {
-            FD_SET(fd[x], &readFds);
+        //FD_ZERO(&readFds);
+        //for (x = 0; x < 2; x++)
+        //{
+            //FD_SET(fd[x], &readFds);
 
-            if (fd[x] > maxFd)
-            {
-                maxFd = fd[x];
-            }
-        }
+            //if (fd[x] > maxFd)
+            //{
+                //maxFd = fd[x];
+            //}
+        //}
 
-        switch (select(maxFd + 1, &readFds, NULL, NULL, &timeout))
-        {
-        case -1: // Error
-            if (errno != EINTR)
-            {
-                fprintf(stderr, "Error: %s: select() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
-                status = -1;
-                done = TRUE;
-            }
-            break;
+        //switch (select(maxFd + 1, &readFds, NULL, NULL, &timeout))
+        //{
+        //case -1: // Error
+            //if (errno != EINTR)
+            //{
+                //fprintf(stderr, "Error: %s: select() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+                //status = -1;
+                //done = TRUE;
+            //}
+            //break;
 
-        case 0: // Timeout
-            fprintf(stderr, "Error: %s: Timeout waiting for %d bytes sent from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
-            status = -1;
-            done = TRUE;
-            break;
+        //case 0: // Timeout
+            //fprintf(stderr, "Error: %s: Timeout waiting for %d bytes sent from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
+            //status = -1;
+            //done = TRUE;
+            //break;
 
-        default:
-            for (x = 0; x < 2; x++)    
-            {
-                if (FD_ISSET(fd[x], &readFds))
-                {
-                    if ((nbytes = read(fd[x], &(buf[offset]), buf_len - offset)) >= 0)
-                    {
-                        if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: %s receive '%s'[%d]\n", __FUNCTION__, devices[x], DbgDataToString(&(buf[offset]), 0, nbytes, NULL, 0), nbytes);
+        //default:
+            //for (x = 0; x < 2; x++)    
+            //{
+                //if (FD_ISSET(fd[x], &readFds))
+                //{
+                    //if ((nbytes = read(fd[x], &(buf[offset]), buf_len - offset)) >= 0)
+                    //{
+                        //if (g_info.debug & _DBG_DATA_ON) fprintf(stdout, "Debug: %s: %s receive '%s'[%d]\n", __FUNCTION__, devices[x], DbgDataToString(&(buf[offset]), 0, nbytes, NULL, 0), nbytes);
 
-                        if (time(NULL) > time_expire)
-                        {
-                            fprintf(stderr, "Error: %s: Timeout waiting for %d bytes sent from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
-                            status = -1;
-                            done = TRUE;
-                            break;
-                        }
+                        //if (time(NULL) > time_expire)
+                        //{
+                            //fprintf(stderr, "Error: %s: Timeout waiting for %d bytes sent from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
+                            //status = -1;
+                            //done = TRUE;
+                            //break;
+                        //}
 
-                        switch (x)
-                        {
-                        case 0:
-                            if (memcmp(&(buf[offset]), &(test_buf[offset]), nbytes) != 0)
-                            {
-                                fprintf(stderr, "Error: %s: Received data sent from %s ==> %s did not match.\n", __FUNCTION__, devices[devIdx], devices[devIdx ^ 1]);
-                                status = -1;
-                                done = TRUE;
-                                break;
-                            }
+                        //switch (x)
+                        //{
+                        //case 0:
+                            //if (memcmp(&(buf[offset]), &(test_buf[offset]), nbytes) != 0)
+                            //{
+                                //fprintf(stderr, "Error: %s: Received data sent from %s ==> %s did not match.\n", __FUNCTION__, devices[devIdx], devices[devIdx ^ 1]);
+                                //status = -1;
+                                //done = TRUE;
+                                //break;
+                            //}
 
-                            if ((nbytes + offset) == test_buf_len)
-                            {
-                                offset = 0;
+                            //if ((nbytes + offset) == test_buf_len)
+                            //{
+                                //offset = 0;
 
-                                done = TRUE;
-                            }
-                            else
-                            {
-                                offset += nbytes;
-                            }
-                            break;
+                                //done = TRUE;
+                            //}
+                            //else
+                            //{
+                                //offset += nbytes;
+                            //}
+                            //break;
 
-                        case 1:
-                            if (memcmp(&(buf[offset]), &(test_buf[offset]), nbytes) != 0)
-                            {
-                                fprintf(stderr, "Error: %s: Received data sent from %s ==> %s did not match.\n", __FUNCTION__, devices[devIdx], devices[devIdx ^ 1]);
-                                status = -1;
-                                done = TRUE;
-                                break;
-                            }
+                        //case 1:
+                            //if (memcmp(&(buf[offset]), &(test_buf[offset]), nbytes) != 0)
+                            //{
+                                //fprintf(stderr, "Error: %s: Received data sent from %s ==> %s did not match.\n", __FUNCTION__, devices[devIdx], devices[devIdx ^ 1]);
+                                //status = -1;
+                                //done = TRUE;
+                                //break;
+                            //}
 
-                            if ((nbytes + offset) == test_buf_len)
-                            {
-                                offset = 0;
+                            //if ((nbytes + offset) == test_buf_len)
+                            //{
+                                //offset = 0;
 
-                                devIdx ^= 1;
-                                if (g_info.verbose) fprintf(stdout, "Debug: %s: Sending %d bytes from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
-                                nbytes = write(fd[devIdx], test_buf, test_buf_len);
-                                if (nbytes != test_buf_len)
-                                {
-                                    fprintf(stderr, "Error: %s: %s sent only %d of requested %d bytes.\n", __FUNCTION__, devices[devIdx], nbytes, test_buf_len);
-                                    status = -1;
-                                    goto e_test_serial;
-                                }
-                            }
-                            else
-                            {
-                                offset += nbytes;
-                            }
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        fprintf(stderr, "Error: %s: read() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
-                        status = -1;
-                        done = TRUE;
-                    }
-                }
-            }
-            break;
-        }
+                                //devIdx ^= 1;
+                                //if (g_info.verbose) fprintf(stdout, "Debug: %s: Sending %d bytes from %s ==> %s.\n", __FUNCTION__, test_buf_len, devices[devIdx], devices[devIdx ^ 1]);
+                                //nbytes = write(fd[devIdx], test_buf, test_buf_len);
+                                //if (nbytes != test_buf_len)
+                                //{
+                                    //fprintf(stderr, "Error: %s: %s sent only %d of requested %d bytes.\n", __FUNCTION__, devices[devIdx], nbytes, test_buf_len);
+                                    //status = -1;
+                                    //goto e_test_serial;
+                                //}
+                            //}
+                            //else
+                            //{
+                                //offset += nbytes;
+                            //}
+                            //break;
+                        //}
+                    //}
+                    //else
+                    //{
+                        //fprintf(stderr, "Error: %s: read() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+                        //status = -1;
+                        //done = TRUE;
+                    //}
+                //}
+            //}
+            //break;
+        //}
 
-        // Reset polling interval
-        timeout.tv_sec = 2;
-        timeout.tv_usec = 0;
-    }
+        //// Reset polling interval
+        //timeout.tv_sec = 2;
+        //timeout.tv_usec = 0;
+    //}
 
-e_test_serial:
-    if (buf != NULL)
-    {
-        free(buf);
-        buf = NULL;
-    }
+//e_test_serial:
+    //if (buf != NULL)
+    //{
+        //free(buf);
+        //buf = NULL;
+    //}
 
-    if (test_buf != NULL)
-    {
-        free(test_buf);
-        test_buf = NULL;
-    }
+    //if (test_buf != NULL)
+    //{
+        //free(test_buf);
+        //test_buf = NULL;
+    //}
 
-    for (x = 0; x < 2; x++)
-    {
-        if (fd[x] != -1)
-        {
-            /* Restore terminal setup */
-            rv = ioctl(fd[x], TCSETS, &(tcs[x]));
-            if (rv < 0)
-            {
-                fprintf(stderr, "Warning: %s: ioctl(TCSETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
-            }
+    //for (x = 0; x < 2; x++)
+    //{
+        //if (fd[x] != -1)
+        //{
+            ///* Restore terminal setup */
+            //rv = ioctl(fd[x], TCSETS, &(tcs[x]));
+            //if (rv < 0)
+            //{
+                //fprintf(stderr, "Warning: %s: ioctl(TCSETS) failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+            //}
 
-            close(fd[x]);
-            fd[x] = -1;
-        }
-    }
+            //close(fd[x]);
+            //fd[x] = -1;
+        //}
+    //}
 
-    return status;
-}
+    //return status;
+//}
 
 /****************************************************************************
  * scan_usb_devices
  */
-static int
-scan_usb_devices(void)
-{
-    int status = 0;
-    char cmd[128];
-    char response[2048];
-    uint8_t usb_devices[8];
-    int rv = 0;
+//static int
+//scan_usb_devices(void)
+//{
+    //int status = 0;
+    //char cmd[128];
+    //char response[2048];
+    //uint8_t usb_devices[8];
+    //int rv = 0;
 
-    /* Scan already complete. No need to rescan. */
-    if (NumUsbList != 0)
-    {
-        goto e_scan_usb_devices;
-    }
+    ///* Scan already complete. No need to rescan. */
+    //if (NumUsbList != 0)
+    //{
+        //goto e_scan_usb_devices;
+    //}
 
-    memset(usb_devices, 0, sizeof(usb_devices));
+    //memset(usb_devices, 0, sizeof(usb_devices));
 
-    sprintf(cmd, "lsusb -v | grep -e iProduct -e bInterfaceClass");
-    rv = execute_cmd_ex(cmd, response, sizeof(response));
-    if (rv < 0)
-    {
-        fprintf(stderr, "Error: %s: execute_cmd_ex('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
-        status = rv;
-        goto e_scan_usb_devices;
-    }
+    //sprintf(cmd, "lsusb -v | grep -e iProduct -e bInterfaceClass");
+    //rv = execute_cmd_ex(cmd, response, sizeof(response));
+    //if (rv < 0)
+    //{
+        //fprintf(stderr, "Error: %s: execute_cmd_ex('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+        //status = rv;
+        //goto e_scan_usb_devices;
+    //}
 
-    /*
-     * Response from the command:
-     *   iProduct                2 Freescale On-Chip EHCI Host Controller
-     *       bInterfaceClass         9 Hub
-     *   iProduct                0 
-     *       bInterfaceClass         9 Hub
-     *       bInterfaceClass         9 Hub
-     *   iProduct                0 
-     *       bInterfaceClass         9 Hub
-     *       bInterfaceClass         9 Hub
-     *   iProduct                2 usb serial converter
-     *       bInterfaceClass       255 Vendor Specific Class
-     *   iProduct                2 Patriot Memory
-     *       bInterfaceClass         8 Mass Storage
-     *   iProduct                4 USB Storage
-     *       bInterfaceClass         8 Mass Storage
-     *   iProduct                2 Handheld Barcode Scanner
-     *       bInterfaceClass         3 Human Interface Device
-     */
+    ///*
+     //* Response from the command:
+     //*   iProduct                2 Freescale On-Chip EHCI Host Controller
+     //*       bInterfaceClass         9 Hub
+     //*   iProduct                0 
+     //*       bInterfaceClass         9 Hub
+     //*       bInterfaceClass         9 Hub
+     //*   iProduct                0 
+     //*       bInterfaceClass         9 Hub
+     //*       bInterfaceClass         9 Hub
+     //*   iProduct                2 usb serial converter
+     //*       bInterfaceClass       255 Vendor Specific Class
+     //*   iProduct                2 Patriot Memory
+     //*       bInterfaceClass         8 Mass Storage
+     //*   iProduct                4 USB Storage
+     //*       bInterfaceClass         8 Mass Storage
+     //*   iProduct                2 Handheld Barcode Scanner
+     //*       bInterfaceClass         3 Human Interface Device
+     //*/
 
-    char *p;
-    for (p = strtok(response, "\n"); p != NULL; p = strtok(NULL, "\n"))
-    {
-        if (strstr(p, "Hub") != NULL)
-        {
-            continue;
-        }
+    //char *p;
+    //for (p = strtok(response, "\n"); p != NULL; p = strtok(NULL, "\n"))
+    //{
+        //if (strstr(p, "Hub") != NULL)
+        //{
+            //continue;
+        //}
 
-        if (strcasestr(p, "serial") != NULL)
-        {
-            usb_devices[_USB_SERIAL]++;
-            continue;
-        }
-        if (strstr(p, "Mass Storage") != NULL)
-        {
-            usb_devices[_USB_MASS_STORAGE]++;
-            continue;
-        }
-        if (strstr(p, "Barcode Scanner") != NULL)
-        {
-            usb_devices[_USB_BARCODE_SCANNER]++;
-            continue;
-        }
-    }
+        //if (strcasestr(p, "serial") != NULL)
+        //{
+            //usb_devices[_USB_SERIAL]++;
+            //continue;
+        //}
+        //if (strstr(p, "Mass Storage") != NULL)
+        //{
+            //usb_devices[_USB_MASS_STORAGE]++;
+            //continue;
+        //}
+        //if (strstr(p, "Barcode Scanner") != NULL)
+        //{
+            //usb_devices[_USB_BARCODE_SCANNER]++;
+            //continue;
+        //}
+    //}
 
-    NumUsbList = 0;
-    if (usb_devices[_USB_SERIAL])
-    {
-        UsbList[NumUsbList++] = (_USB_SERIAL << 1);
-    }
-    if (usb_devices[_USB_MASS_STORAGE] > 0)
-    {
-        UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1);
-    }
-    if (usb_devices[_USB_MASS_STORAGE] > 1)
-    {
-        UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1) | 1;
-    }
-    if (usb_devices[_USB_BARCODE_SCANNER])
-    {
-        UsbList[NumUsbList++] = (_USB_BARCODE_SCANNER << 1);
-    }
+    //NumUsbList = 0;
+    //if (usb_devices[_USB_SERIAL])
+    //{
+        //UsbList[NumUsbList++] = (_USB_SERIAL << 1);
+    //}
+    //if (usb_devices[_USB_MASS_STORAGE] > 0)
+    //{
+        //UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1);
+    //}
+    //if (usb_devices[_USB_MASS_STORAGE] > 1)
+    //{
+        //UsbList[NumUsbList++] = (_USB_MASS_STORAGE << 1) | 1;
+    //}
+    //if (usb_devices[_USB_BARCODE_SCANNER])
+    //{
+        //UsbList[NumUsbList++] = (_USB_BARCODE_SCANNER << 1);
+    //}
 
-e_scan_usb_devices:
+//e_scan_usb_devices:
 
-    return status;
-}
+    //return status;
+//}
 
 /****************************************************************************
  * test_UsbDiskDrive
@@ -1786,17 +1786,17 @@ e_test_UsbDiskDrive:
 /****************************************************************************
  * test_UsbSerial
  */
-static int
-test_UsbSerial(void)
-{
-    const char *devices[] = { "/dev/ttyUSB0", "/dev/ttySP1" };
+//static int
+//test_UsbSerial(void)
+//{
+    //const char *devices[] = { "/dev/ttyUSB0", "/dev/ttySP1" };
 
-    //DWG J4:USB1 w/ USB-to-Serial:/dev/ttyUSB0 <==> J3:AUART1:/dev/ttySP1
+    ////DWG J4:USB1 w/ USB-to-Serial:/dev/ttyUSB0 <==> J3:AUART1:/dev/ttySP1
 
-    if (g_info.verbose) fprintf(stdout, "Debug: %s: Test USB port with USB Serial device.\n", __FUNCTION__);
+    //if (g_info.verbose) fprintf(stdout, "Debug: %s: Test USB port with USB Serial device.\n", __FUNCTION__);
 
-    return test_serial(devices, g_info.rs232_baud);
-}
+    //return test_serial(devices, g_info.rs232_baud);
+//}
 
 /****************************************************************************
 * test_USB1
@@ -1805,32 +1805,34 @@ static int
 test_USB1(void)
 {
 	int status = 0;
-	int rv = 0;
-	//DWG J4:USB1
-	rv = scan_usb_devices();
-	if (rv < 0)
-	{
-		fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
-		status = -1;
-		goto e_test_USB1;
-	}
-	if (NumUsbList <= 0)
-	{
-		fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
-		status = 1;
-		goto e_test_USB1;
-	}
-	int n = 0;
-	switch (UsbList[n] >> 1)
-	{
-		case _USB_SERIAL:
-			status = test_UsbSerial();
-			break;
-		case _USB_MASS_STORAGE:
-			status = test_UsbDiskDrive(UsbList[n] & 0x01);
-			break;
-	}
-e_test_USB1:
+	//int rv = 0;
+	////DWG J4:USB1
+	//rv = scan_usb_devices();
+	//if (rv < 0)
+	//{
+		//fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
+		//status = -1;
+		//goto e_test_USB1;
+	//}
+	//if (NumUsbList <= 0)
+	//{
+		//fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
+		//status = 1;
+		//goto e_test_USB1;
+	//}
+	//int n = 0;
+	//switch (UsbList[n] >> 1)
+	//{
+		//case _USB_SERIAL:
+			//status = test_UsbSerial();
+			//break;
+		//case _USB_MASS_STORAGE:
+			//status = test_UsbDiskDrive(UsbList[n] & 0x01);
+			//break;
+	//}
+//e_test_USB1:
+
+	 status = test_UsbDiskDrive(0);
 
 	return status;
 }
@@ -1842,32 +1844,34 @@ static int
 test_USB2(void)
 {
 	int status = 0;
-	int rv = 0;
-	//DWG J5:USB2
-	rv = scan_usb_devices();
-	if (rv < 0)
-	{
-		fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
-		status = -1;
-		goto e_test_USB2;
-	}
-	if (NumUsbList <= 0)
-	{
-		fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
-		status = 1;
-		goto e_test_USB2;
-	}
-	int n = 1;
-	switch (UsbList[n] >> 1)
-	{
-		case _USB_SERIAL:
-			status = test_UsbSerial();
-			break;
-		case _USB_MASS_STORAGE:
-			status = test_UsbDiskDrive(UsbList[n] & 0x01);
-			break;
-	}
-e_test_USB2:
+	//int rv = 0;
+	////DWG J5:USB2
+	//rv = scan_usb_devices();
+	//if (rv < 0)
+	//{
+		//fprintf(stderr, "Error: %s: scan_usb_devices() failed.\n", __FUNCTION__);
+		//status = -1;
+		//goto e_test_USB2;
+	//}
+	//if (NumUsbList <= 0)
+	//{
+		//fprintf(stderr, "Warning: %s: %d USB devices connected. Unable to test 1st USB device.\n", __FUNCTION__, NumUsbList);
+		//status = 1;
+		//goto e_test_USB2;
+	//}
+	//int n = 1;
+	//switch (UsbList[n] >> 1)
+	//{
+		//case _USB_SERIAL:
+			//status = test_UsbSerial();
+			//break;
+		//case _USB_MASS_STORAGE:
+			//status = test_UsbDiskDrive(UsbList[n] & 0x01);
+			//break;
+	//}
+//e_test_USB2:
+
+	 status = test_UsbDiskDrive(1);
 
 	return status;
 }

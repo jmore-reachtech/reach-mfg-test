@@ -1348,6 +1348,66 @@ e_test_Ethernet:
     return status;
 }
 
+/****************************************************************************
+ * test_RTC
+ */
+static int
+test_RTC(void)
+{
+    int status = 0;
+    char cmd[128];
+    int rv = 0;
+    ethIf_t *ep = NULL;
+    const char *server_ip = NULL;
+
+    //DWG U28:RTC
+    // Target
+    //   Set time/date <== Host via Ethernet
+    //   rdate -s 10.10.10.1
+    //   date --utc -s "%s"
+    //   hwclock --systohc --utc
+
+    server_ip = g_info.ethernet.server_ip;
+    ep = network_open(NETWORK_ETHERNET, 0);
+    if (ep == NULL)
+    {
+        fprintf(stderr, "Error: %s: network_open() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+        status = -1;
+        goto e_test_RTC;
+    }
+
+    sprintf(cmd, "rdate %s", server_ip);
+    rv = execute_cmd(cmd);
+    if (rv < 0)
+    {
+        fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+        status = rv;
+        goto e_test_RTC;
+    }
+
+    sprintf(cmd, "hwclock --systohc --utc");
+    rv = execute_cmd(cmd);
+    if (rv < 0)
+    {
+        fprintf(stderr, "Error: %s: execute_cmd('%s') failed: %s [%d]\n", __FUNCTION__, cmd, strerror(errno), errno);
+        status = rv;
+        goto e_test_RTC;
+    }
+
+    e_test_RTC:
+    if (ep != NULL)
+    {
+        rv = network_close(ep);
+        if (rv < 0)
+        {
+            fprintf(stderr, "Error: %s: network_close() failed: %s [%d]\n", __FUNCTION__, strerror(errno), errno);
+            status = -1;
+        }
+        ep = NULL;
+    }
+
+    return status;
+}
 
 
 /****************************************************************************
@@ -2714,6 +2774,7 @@ struct {
 } MfgTests[] = {
     { "J3",     "Ethernet",         test_Ethernet,     	_TEST_P1 },
     { "J5",     "USBOTG",           test_USBOTG,       	_TEST_P1 },
+    { "EXT",    "RTC",              test_RTC,           _TEST_P1 },
 #define TESTS_PHASE1    12                                
     { "J14",    "LCD",              test_LCD,          	_TEST_P1 },
     { "J8",    	"Backlight",        test_Backlight,    	_TEST_P1 },
